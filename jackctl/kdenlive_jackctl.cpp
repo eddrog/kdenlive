@@ -53,6 +53,7 @@ int main(int argc, char **argv)
 //    QCoreApplication app(argc, argv);
 //    QStringList args = app.arguments();
     Mlt::Filter *mltFilterJack;
+    Mlt::Filter *mltFilterJackProbe;
     Mlt::Profile *mltProfile = new Mlt::Profile();
 	Mlt::Consumer *c;
 	Mlt::Producer *p;
@@ -70,6 +71,18 @@ int main(int argc, char **argv)
     /* create the mlt jack filter */
 //    mltFilterJack = new Mlt::Filter (*mltProfile, "jackrack", NULL);
 //    std::cout << "jack filter created ..." << "\n";
+
+    mltFilterJackProbe = new Mlt::Filter (*mltProfile, "jackprobe", NULL);
+
+    if(mltFilterJackProbe->is_valid()) {
+        /* some debug */
+        std::cout << "Jack Server is running ..." << "\n";
+    }
+    else{
+        std::cout << "Jack Server is not running ..." << "\n";
+    }
+
+    if(mltFilterJackProbe) delete mltFilterJackProbe;
 
     /**/
     m_blackClip = new Mlt::Producer(*mltProfile, "colour", "black");
