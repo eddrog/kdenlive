@@ -1286,6 +1286,16 @@ void MainWindow::setupActions()
     insertTimeline->setShortcut(Qt::SHIFT + Qt::CTRL + Qt::Key_I);
     connect(insertTimeline, SIGNAL(triggered(bool)), this, SLOT(slotInsertZoneToTimeline()));
 
+    KAction *connectJack = collection.addAction("connect_jack");
+    connectJack->setText(i18n("Connect Jack"));
+    connectJack->setShortcut(Qt::SHIFT + Qt::CTRL + Qt::Key_A);
+    connect(connectJack, SIGNAL(triggered(bool)), this, SLOT(slotConnectJack()));
+
+    KAction *disconnectJack = collection.addAction("disconnect_jack");
+    disconnectJack->setText(i18n("Disconnect Jack"));
+    disconnectJack->setShortcut(Qt::SHIFT + Qt::CTRL + Qt::Key_D);
+    connect(disconnectJack, SIGNAL(triggered(bool)), this, SLOT(slotDisconnectJack()));
+
     KAction *resizeStart =  new KAction(KIcon(), i18n("Resize Item Start"), this);
     collection.addAction("resize_timeline_clip_start", resizeStart);
     resizeStart->setShortcut(Qt::Key_1);
@@ -4491,6 +4501,61 @@ void MainWindow::slotSaveTimelineClip()
 	if (!url.isEmpty()) m_projectMonitor->render->saveClip(m_activeDocument->tracksCount() - clip->track(), clip->startPos(), url);
     }
 }
+
+//#ifdef USE_JACK
+void MainWindow::slotConnectJack()
+{
+	if (m_projectMonitor != NULL) {
+		Render * rp = m_projectMonitor->render;
+
+		if ( rp != NULL)
+		{
+			setenv("JACK_NAME_PRJ", "KdlivePrjMon", 1);
+			rp->mltConnectJack();
+			unsetenv("JACK_NAME_PRJ");
+			kDebug() << "Project monitor connected to jack" << "\n";
+		}
+	}
+
+	if (m_clipMonitor != NULL)	{
+		Render * rc = m_clipMonitor->render;
+
+		if ( rc != NULL )
+		{
+			setenv("JACK_NAME_CLIP", "KdliveClipMon", 1);
+			rc->mltConnectJack();
+			unsetenv("JACK_NAME_CLIP");
+			kDebug() << "Clip monitor connected to jack" << "\n";
+		}
+	}
+
+}
+
+void MainWindow::slotDisconnectJack()
+{
+	if (m_projectMonitor != NULL)
+	{
+		Render * rp = m_projectMonitor->render;
+
+		if ( rp != NULL)
+		{
+			rp->mltDisconnectJack();
+			kDebug() << "Project monitor disconnected from Jack" << "\n";
+		}
+	}
+
+	if (m_clipMonitor != NULL) {
+
+		Render * rc = m_clipMonitor->render;
+		if ( rc != NULL)
+		{
+			rc->mltDisconnectJack();
+
+			kDebug() << "Clip monitor disconnected from Jack" << "\n";
+		}
+	}
+}
+//#endif
 
 
 #include "mainwindow.moc"

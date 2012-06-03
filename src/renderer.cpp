@@ -53,6 +53,17 @@
 
 #include <QDebug>
 
+#include <QThread>
+
+// Can't believe I need to do this to sleep.
+class SleepThread : QThread
+{
+public:
+    virtual void run() {};
+    static void msleep(unsigned long msecs) {
+        QThread::msleep(msecs);
+    }
+};
 
 static void kdenlive_callback(void* /*ptr*/, int level, const char* fmt, va_list vl)
 {
@@ -115,6 +126,7 @@ Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWi
     m_isZoneMode(false),
     m_isLoopMode(false),
     m_isSplitView(false),
+    m_isJackActive(false),
     m_blackClip(NULL),
     m_winid(winid)
 {
@@ -131,7 +143,8 @@ Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWi
 
 Render::~Render()
 {
-    closeMlt();
+	mltDisconnectJack();
+	closeMlt();
     delete m_mltProfile;
 }
 
@@ -391,6 +404,16 @@ void Render::seek(int time)
         return;
 
     m_mltProducer->seek(time);
+
+#ifdef USE_JACK
+    if(m_name == Kdenlive::projectMonitor && m_mltFilterJack && m_isJackActive)
+    {
+    	if (time < 0) time = 0;
+        mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
+		mlt_events_fire(jack_properties, "jack-seek", &time, NULL);
+   }
+#endif
+
     if (m_mltProducer->get_speed() == 0) {
         refresh();
     }
@@ -1449,6 +1472,7 @@ void Render::pause()
     m_mltConsumer->purge();
 }
 
+#ifndef USE_JACK
 void Render::switchPlay(bool play)
 {
     QMutexLocker locker(&m_mutex);
@@ -1479,6 +1503,7 @@ void Render::switchPlay(bool play)
         emit rendererPosition(m_framePosition);*/
     }
 }
+#endif
 
 void Render::play(double speed)
 {
@@ -1540,6 +1565,16 @@ void Render::seekToFrame(int pos)
         return;
     resetZoneMode();
     m_mltProducer->seek(pos);
+
+#ifdef USE_JACK
+    if(m_name == Kdenlive::projectMonitor && m_mltFilterJack && m_isJackActive)
+    {
+    	if (pos < 0) pos = 0;
+        mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
+		mlt_events_fire(jack_properties, "jack-seek", &pos, NULL);
+   }
+#endif
+
     if (m_mltProducer->get_speed() == 0) {
         refresh();
     }
@@ -1550,7 +1585,19 @@ void Render::seekToFrameDiff(int diff)
     if (!m_mltProducer)
         return;
     resetZoneMode();
-    m_mltProducer->seek(m_mltProducer->position() + diff);
+
+    int pos = m_mltProducer->position() + diff;
+    m_mltProducer->seek(pos);
+
+#ifdef USE_JACK
+    if(m_name == Kdenlive::projectMonitor && m_mltFilterJack && m_isJackActive)
+    {
+    	if(pos < 0) pos = 0;
+        mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
+		mlt_events_fire(jack_properties, "jack-seek", &pos, NULL);
+   }
+#endif
+
     refresh();
 }
 
@@ -4443,6 +4490,252 @@ bool Render::getBlackMagicOutputDeviceList(KComboBox *devicelist)
     }
     return true;
 }
+
+#ifdef USE_JACK
+void Render::_on_jack_stopped( mlt_properties owner, mlt_consumer consumer, mlt_position *position )
+{
+	Render *r = (Render*)consumer;// mlt_properties_get_data(owner, "render", NULL);
+
+	r->mltOnJackStopped(position);
+	//r->dar();
+	//std::cout << "_on_jack_stopped";
+}
+
+void Render::_on_jack_started( mlt_properties owner, mlt_consumer consumer, mlt_position *position )
+{
+	Render *r = (Render*)consumer;// mlt_properties_get_data(owner, "render", NULL);
+
+	r->mltOnJackStarted(position);
+	//r->dar();
+	//std::cout << "_on_jack_stopped";
+}
+
+void Render::mltOnJackStopped(mlt_position *position)
+{
+	if(m_mltProducer)
+	{
+//		if(m_mltProducer->get_speed() != 0)
+//		{
+//			m_mltFilterJack->fire_event("jack-stop");
+//		}
+//		else
+		{
+			m_mltProducer->set_speed(0.0);
+			m_mltConsumer->purge();
+			m_mltProducer->seek(*position);
+			m_mltConsumer->set("refresh", 1);
+		}
+	}
+}
+
+void Render::mltOnJackStarted(mlt_position *position)
+{
+	if(m_mltProducer)
+	{
+		m_mltProducer->set_speed(1.0);
+		m_mltConsumer->purge();
+		m_mltProducer->seek(*position);
+		m_mltConsumer->set("refresh", 1);
+	}
+}
+
+void Render::mltConnectJack()
+{
+    /* TODO: review eddrog - connecting jack */
+    //Mlt::Properties properties(m_mltConsumer->get_properties());
+	if (!m_mltConsumer->is_stopped())
+			m_mltConsumer->stop();
+
+
+	if (m_isJackActive == false) {
+		// create jackrack filter using the factory
+		m_mltFilterJack = new Mlt::Filter(*m_mltProfile, "jackrack", NULL);
+
+		if(m_mltFilterJack != NULL && m_mltFilterJack->is_valid()) {
+			// attach filter to consumer
+			m_mltConsumer->attach(*m_mltFilterJack);
+
+			// set comsumer properties
+			m_mltConsumer->set("audio_off", 1);
+			//m_mltConsumer->set("jack_filter", jackFilter, 0, (mlt_destructor) mlt_filter_close, NULL );
+
+			// set filter properties
+			m_mltFilterJack->set("out_1", "system:playback_1");
+			m_mltFilterJack->set("out_2", "system:playback_2");
+
+			if ( m_name == Kdenlive::projectMonitor ) {
+				// register the jack listeners
+				m_mltFilterJack->listen("jack-stopped", this, (mlt_listener) Render::_on_jack_stopped);
+				m_mltFilterJack->listen("jack-started", this, (mlt_listener) Render::_on_jack_started);
+			}
+
+			// start the consumer
+			m_mltConsumer->start();
+
+			// set the jack state
+			m_isJackActive = true;
+
+			SleepThread::msleep(1000);
+
+			m_mltConsumer->stop();
+
+
+		} else {
+			delete m_mltFilterJack;
+			m_mltFilterJack = NULL;
+		}
+	}
+
+#if 0
+    	mlt_properties properties = MLT_CONSUMER_PROPERTIES( m_mltConsumer->get_consumer() );
+    	//m_mltFilterJack = Mlt::Factory::filter(*m_mltProfile,"jackrack", NULL);
+
+    	mlt_filter jack = mlt_factory_filter( m_mltProfile->get_profile(), "jackrack", NULL );
+		mlt_properties jack_properties = MLT_FILTER_PROPERTIES(jack);
+
+		mlt_service_attach( MLT_CONSUMER_SERVICE(m_mltConsumer->get_consumer()), jack );
+		mlt_properties_set_int( properties, "audio_off", 1 );
+		mlt_properties_set_data( properties, "jack_filter", jack, 0, (mlt_destructor) mlt_filter_close, NULL );
+		mlt_properties_set( jack_properties, "out_1", "system:playback_1" );
+		mlt_properties_set( jack_properties, "out_2", "system:playback_2" );
+		mlt_properties_set_data( jack_properties, "render", this, 0, NULL, NULL );
+#endif
+
+#if 0
+		mlt_properties_set_data( MLT_CONSUMER_PROPERTIES( m_mltConsumer->get_consumer() ), "transport_producer", m_mltProducer->get_producer() , 0, NULL, NULL );
+		//mlt_properties_set_data( MLT_PRODUCER_PROPERTIES( m_mltProducer->get_producer() ), "transport_consumer", m_mltConsumer->get_consumer(), 0, NULL, NULL );
+
+
+		mlt_events_listen( jack_properties, m_mltConsumer->get_consumer(), "jack-started", (mlt_listener) on_jack_started );
+		mlt_events_listen( jack_properties, m_mltConsumer->get_consumer(), "jack-stopped", (mlt_listener) Render::_on_jack_stopped );
+#endif
+
+}
+
+void Render::mltDisconnectJack()
+{
+    	if (m_mltFilterJack && /* m_mltFilterJack->is_valid() && */ m_isJackActive)
+    	{
+    		if (!m_mltConsumer->is_stopped())
+    			m_mltConsumer->stop();
+    		// detach filter from consumer
+    		m_mltConsumer->detach(*m_mltFilterJack);
+
+    		// enable audio playback
+    		m_mltConsumer->set("audio_off", 0);
+
+    		// delete the jack filter
+    		if (m_mltFilterJack)
+    	    	delete m_mltFilterJack;
+    		// the the jack state
+    		m_isJackActive = false;
+    	}
+}
+
+void Render::switchPlay(bool play)
+{
+    QMutexLocker locker(&m_mutex);
+
+    //mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
+
+    if (!m_mltProducer || !m_mltConsumer) {
+        return;
+    }
+
+    if (m_isZoneMode) {
+    	resetZoneMode();
+    }
+
+    if (play && m_mltProducer->get_speed() == 0.0) {
+        if (m_name == Kdenlive::projectMonitor) {
+        	int32_t pos = m_mltConsumer->position();
+			//mlt_events_fire( jack, "jack-seek", &pos, NULL );
+			//mlt_events_fire( jack, "jack-start", NULL );
+        	if(m_isJackActive) {
+        		//jack_properties
+        		//m_mltFilterJack->fire_event("jack-seek", *pos, NULL);
+        		//mlt_events_fire(jack_properties, "jack-seek", &pos, NULL);
+
+        		//mlt_events_fire(jack_properties, "jack-start",NULL);
+//                if (m_mltConsumer->is_stopped()) {
+//                    m_mltConsumer->start();
+//                }
+                m_mltConsumer->purge();
+        		m_mltFilterJack->fire_event("jack-start");
+        	} else {
+                if (m_mltConsumer->is_stopped()) {
+                    m_mltConsumer->start();
+                }
+                m_mltProducer->set_speed(1.0);
+                m_mltConsumer->set("refresh", 1);
+        	}
+        } else {
+            if (m_name == Kdenlive::clipMonitor && m_mltConsumer->position() == m_mltProducer->get_out()) m_mltProducer->seek(0);
+            if (m_mltConsumer->is_stopped()) {
+                m_mltConsumer->start();
+            }
+            m_mltProducer->set_speed(1.0);
+            m_mltConsumer->set("refresh", 1);
+
+        }
+
+    }
+    else if (!play)
+    {
+
+        if (m_name == Kdenlive::projectMonitor) {
+        	//int32_t pos = 0;//m_mltConsumer->position();
+        	//mlt_events_fire( jack, "jack-seek", &pos, NULL );
+        	//mlt_events_fire( jack, "jack-stop", NULL );
+        	if (m_isJackActive) {
+            	m_mltProducer->set_speed(0.0);
+//                m_mltProducer->seek(m_mltConsumer->position());
+                //m_mltConsumer->set("refresh", 0);
+                m_mltConsumer->purge();
+                int pos = m_mltProducer->position();
+
+                //if (!m_mltConsumer->is_stopped()) m_mltConsumer->stop();
+                if (m_isZoneMode) resetZoneMode();
+                // fire stop event
+        		m_mltFilterJack->fire_event("jack-stop");
+
+        		mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
+        		//mlt_events_fire(jack_properties, "jack-seek", &pos, NULL);
+        	} else {
+                m_mltProducer->set_speed(0.0);
+                m_mltConsumer->set("refresh", 0);
+                m_mltProducer->seek(m_mltConsumer->position());
+                if (!m_mltConsumer->is_stopped()) m_mltConsumer->stop();
+                if (m_isZoneMode) resetZoneMode();
+        	}
+        } else {
+            m_mltProducer->set_speed(0.0);
+            m_mltConsumer->set("refresh", 0);
+            m_mltProducer->seek(m_mltConsumer->position());
+            if (!m_mltConsumer->is_stopped()) m_mltConsumer->stop();
+            if (m_isZoneMode) resetZoneMode();
+
+            //emitConsumerStopped();
+            /*m_mltConsumer->set("refresh", 0);
+            m_mltConsumer->stop();
+            m_mltConsumer->purge();
+            m_mltProducer->set_speed(0.0);
+            //m_framePosition = m_mltProducer->position();
+            m_mltProducer->seek(m_framePosition);
+            emit rendererPosition(m_framePosition);*/
+        }
+
+        //emitConsumerStopped();
+        /*m_mltConsumer->set("refresh", 0);
+        m_mltConsumer->stop();
+        m_mltConsumer->purge();
+        m_mltProducer->set_speed(0.0);
+        //m_framePosition = m_mltProducer->position();
+        m_mltProducer->seek(m_framePosition);
+        emit rendererPosition(m_framePosition);*/
+    }
+}
+#endif
 
 #include "renderer.moc"
 

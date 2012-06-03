@@ -261,9 +261,9 @@ kde4_add_ui_files(kdenlive_UIS
   widgets/cutjobdialog_ui.ui
 )
 
-if(OPENGL_FOUND)
-  list(APPEND kdenlive_SRCS videoglwidget.cpp)
-endif(OPENGL_FOUND)
+#if(OPENGL_FOUND)
+#  list(APPEND kdenlive_SRCS videoglwidget.cpp)
+#endif(OPENGL_FOUND)
 
 if(BUILD_JogShuttle)
   list(APPEND kdenlive_SRCS
@@ -330,7 +330,7 @@ if(Q_WS_X11)
 endif(Q_WS_X11)
 
 if(OPENGL_FOUND AND QT_QTOPENGL_FOUND)
-  add_definitions(-DUSE_OPENGL)
+#  add_definitions(-DUSE_OPENGL)
   target_link_libraries(kdenlive ${OPENGL_LIBRARIES})
 endif(OPENGL_FOUND AND QT_QTOPENGL_FOUND)
 
@@ -357,6 +357,10 @@ endif(BUILD_V4L)
 if(BUILD_JogShuttle)
   add_definitions(-DUSE_JOGSHUTTLE)
 endif(BUILD_JogShuttle)
+
+# if(BUILD_JACK)
+  add_definitions(-DUSE_JACK)
+# endif(BUILD_JACK)
 
 install(TARGETS kdenlive DESTINATION ${BIN_INSTALL_DIR})
 install(FILES

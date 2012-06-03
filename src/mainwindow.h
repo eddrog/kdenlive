@@ -566,6 +566,11 @@ private slots:
     /** @brief Save current timeline clip as mlt playlist. */
     void slotSaveTimelineClip();
 
+//#ifdef USE_JACK
+    void slotConnectJack();
+    void slotDisconnectJack();
+//#endif
+
 signals:
     Q_SCRIPTABLE void abortRenderJob(const QString &url);
 };

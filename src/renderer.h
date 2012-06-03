@@ -111,6 +111,11 @@ Q_OBJECT public:
     void seek(int time);
     void seekToFrameDiff(int diff);
 
+#ifdef USE_JACK
+    void mltConnectJack();
+    void mltDisconnectJack();
+#endif
+
     QPixmap getImageThumbnail(KUrl url, int width, int height);
 
     /** @brief Sets the current MLT producer playlist.
@@ -362,6 +367,15 @@ private:
     QLocale m_locale;
     QFuture <void> m_infoThread;
     QList <requestClipInfo> m_requestList;
+
+#ifdef USE_JACK
+    bool m_isJackActive;
+    Mlt::Filter *m_mltFilterJack;
+    static void _on_jack_stopped( mlt_properties owner, mlt_consumer consumer, mlt_position *position );
+    static void _on_jack_started( mlt_properties owner, mlt_consumer consumer, mlt_position *position );
+    void mltOnJackStopped(mlt_position *position);
+    void mltOnJackStarted(mlt_position *position);
+#endif
 
     void closeMlt();
     void mltCheckLength(Mlt::Tractor *tractor);

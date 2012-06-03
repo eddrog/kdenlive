@@ -161,6 +161,9 @@
       <Action name="switch_monitor" />
       <Action name="insert_project_tree" />
       <Action name="insert_timeline" />
+      <Separator />
+      <Action name="connect_jack" />
+      <Action name="disconnect_jack" />
     </Menu>
     <Menu name="dockwindows" ><text>View</text>
       <Menu name="layout_save_as" ><text>Save Layout As</text>
