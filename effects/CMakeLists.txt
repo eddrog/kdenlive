@@ -65,6 +65,7 @@ frei0r_glow.xml
 frei0r_hqdn3d.xml
 frei0r_hueshift0r.xml
 frei0r_iirblur.xml
+frei0r_keyspillm0pup.xml
 frei0r_lenscorrection.xml
 frei0r_letterb0xed.xml
 frei0r_levels.xml
@@ -90,6 +91,7 @@ frei0r_tehroxx0r.xml
 frei0r_three_point_balance.xml
 frei0r_threelay0r.xml
 frei0r_threshold0r.xml
+frei0r_timeout.xml
 frei0r_tint0r.xml
 frei0r_twolay0r.xml
 frei0r_vectorscope.xml
