@@ -283,7 +283,7 @@ void ClipItem::initEffect(QDomElement effect, int diff, int offset)
             int start = end;
             if (effect.attribute("id") == "fadeout") {
                 if (m_effectList.hasEffect(QString(), "fade_to_black") == -1) {
-                    int effectDuration = EffectsList::parameter(effect, "in").toInt();
+                    int effectDuration = EffectsList::parameter(effect, "out").toInt() - EffectsList::parameter(effect, "in").toInt();
                     if (effectDuration > cropDuration().frames(m_fps)) {
                         effectDuration = cropDuration().frames(m_fps) / 2;
                     }
@@ -294,7 +294,7 @@ void ClipItem::initEffect(QDomElement effect, int diff, int offset)
                 }
             } else if (effect.attribute("id") == "fade_to_black") {
                 if (m_effectList.hasEffect(QString(), "fadeout") == -1) {
-                    int effectDuration = EffectsList::parameter(effect, "in").toInt();
+                    int effectDuration = EffectsList::parameter(effect, "out").toInt() - EffectsList::parameter(effect, "in").toInt();
                     if (effectDuration > cropDuration().frames(m_fps)) {
                         effectDuration = cropDuration().frames(m_fps) / 2;
                     }
@@ -312,21 +312,23 @@ void ClipItem::initEffect(QDomElement effect, int diff, int offset)
             if (effect.attribute("id") == "fadein") {
                 if (m_effectList.hasEffect(QString(), "fade_from_black") == -1) {
                     int effectDuration = EffectsList::parameter(effect, "out").toInt();
+		    if (offset != 0) effectDuration -= offset;
                     if (effectDuration > cropDuration().frames(m_fps)) {
                         effectDuration = cropDuration().frames(m_fps) / 2;
                     }
                     end += effectDuration;
                 } else
-                    end += EffectsList::parameter(m_effectList.getEffectByTag(QString(), "fade_from_black"), "out").toInt();
+                    end += EffectsList::parameter(m_effectList.getEffectByTag(QString(), "fade_from_black"), "out").toInt() - offset;
             } else if (effect.attribute("id") == "fade_from_black") {
                 if (m_effectList.hasEffect(QString(), "fadein") == -1) {
                     int effectDuration = EffectsList::parameter(effect, "out").toInt();
+		    if (offset != 0) effectDuration -= offset;
                     if (effectDuration > cropDuration().frames(m_fps)) {
                         effectDuration = cropDuration().frames(m_fps) / 2;
                     }
                     end += effectDuration;
                 } else
-                    end += EffectsList::parameter(m_effectList.getEffectByTag(QString(), "fadein"), "out").toInt();
+                    end += EffectsList::parameter(m_effectList.getEffectByTag(QString(), "fadein"), "out").toInt() - offset;
             }
             EffectsList::setParameter(effect, "in", QString::number(start));
             EffectsList::setParameter(effect, "out", QString::number(end));
@@ -1462,6 +1464,18 @@ EffectsParameterList ClipItem::addEffect(QDomElement effect, bool /*animate*/)
     
     // Update index to the real one
     effect.setAttribute("kdenlive_ix", insertedEffect.attribute("kdenlive_ix"));
+    int effectIn;
+    int effectOut;
+
+    if (effect.attribute("tag") == "affine") {
+	// special case: the affine effect needs in / out points
+	effectIn = effect.attribute("in").toInt();
+	effectOut = effect.attribute("out").toInt();
+    }
+    else {
+	effectIn = EffectsList::parameter(effect, "in").toInt();
+	effectOut = EffectsList::parameter(effect, "out").toInt();
+    }
     
     EffectsParameterList parameters;
     parameters.addParam("tag", insertedEffect.attribute("tag"));
@@ -1473,11 +1487,50 @@ EffectsParameterList ClipItem::addEffect(QDomElement effect, bool /*animate*/)
     if (effectId.isEmpty()) effectId = insertedEffect.attribute("tag");
     parameters.addParam("id", effectId);
 
-    // special case: the affine effect needs in / out points
-
     QDomNodeList params = insertedEffect.elementsByTagName("parameter");
     int fade = 0;
     bool needInOutSync = false;
+
+    // check if it is a fade effect
+    if (effectId == "fadein") {
+	needRepaint = true;
+        if (m_effectList.hasEffect(QString(), "fade_from_black") == -1) {
+	    fade = effectOut - effectIn;
+        }/* else {
+	    QDomElement fadein = m_effectList.getEffectByTag(QString(), "fade_from_black");
+            if (fadein.attribute("name") == "out") fade += fadein.attribute("value").toInt();
+            else if (fadein.attribute("name") == "in") fade -= fadein.attribute("value").toInt();
+        }*/
+    } else if (effectId == "fade_from_black") {
+	kDebug()<<"// FOUND FTB:"<<effectOut<<" - "<<effectIn;
+	needRepaint = true;
+        if (m_effectList.hasEffect(QString(), "fadein") == -1) {
+	    fade = effectOut - effectIn;
+        }/* else {
+	    QDomElement fadein = m_effectList.getEffectByTag(QString(), "fadein");
+            if (fadein.attribute("name") == "out") fade += fadein.attribute("value").toInt();
+            else if (fadein.attribute("name") == "in") fade -= fadein.attribute("value").toInt();
+        }*/
+     } else if (effectId == "fadeout") {
+	needRepaint = true;
+        if (m_effectList.hasEffect(QString(), "fade_to_black") == -1) {
+	    fade = effectIn - effectOut;
+        } /*else {
+	    QDomElement fadeout = m_effectList.getEffectByTag(QString(), "fade_to_black");
+            if (fadeout.attribute("name") == "out") fade -= fadeout.attribute("value").toInt();
+            else if (fadeout.attribute("name") == "in") fade += fadeout.attribute("value").toInt();
+        }*/
+    } else if (effectId == "fade_to_black") {
+	needRepaint = true;
+        if (m_effectList.hasEffect(QString(), "fadeout") == -1) {
+	    fade = effectIn - effectOut;
+        }/* else {
+	    QDomElement fadeout = m_effectList.getEffectByTag(QString(), "fadeout");
+            if (fadeout.attribute("name") == "out") fade -= fadeout.attribute("value").toInt();
+            else if (fadeout.attribute("name") == "in") fade += fadeout.attribute("value").toInt();
+        }*/
+    }
+
     for (int i = 0; i < params.count(); i++) {
         QDomElement e = params.item(i).toElement();
         if (!e.isNull()) {
@@ -1511,48 +1564,6 @@ EffectsParameterList ClipItem::addEffect(QDomElement effect, bool /*animate*/)
             } else if (e.attribute("factor", "1") == "1" && e.attribute("offset", "0") == "0") {
                 parameters.addParam(e.attribute("name"), e.attribute("value"));
 
-                // check if it is a fade effect
-                if (effectId == "fadein") {
-                    needRepaint = true;
-                    if (m_effectList.hasEffect(QString(), "fade_from_black") == -1) {
-                        if (e.attribute("name") == "out") fade += e.attribute("value").toInt();
-                        else if (e.attribute("name") == "in") fade -= e.attribute("value").toInt();
-                    } else {
-                        QDomElement fadein = m_effectList.getEffectByTag(QString(), "fade_from_black");
-                        if (fadein.attribute("name") == "out") fade += fadein.attribute("value").toInt();
-                        else if (fadein.attribute("name") == "in") fade -= fadein.attribute("value").toInt();
-                    }
-                } else if (effectId == "fade_from_black") {
-                    needRepaint = true;
-                    if (m_effectList.hasEffect(QString(), "fadein") == -1) {
-                        if (e.attribute("name") == "out") fade += e.attribute("value").toInt();
-                        else if (e.attribute("name") == "in") fade -= e.attribute("value").toInt();
-                    } else {
-                        QDomElement fadein = m_effectList.getEffectByTag(QString(), "fadein");
-                        if (fadein.attribute("name") == "out") fade += fadein.attribute("value").toInt();
-                        else if (fadein.attribute("name") == "in") fade -= fadein.attribute("value").toInt();
-                    }
-                } else if (effectId == "fadeout") {
-                    needRepaint = true;
-                    if (m_effectList.hasEffect(QString(), "fade_to_black") == -1) {
-                        if (e.attribute("name") == "out") fade -= e.attribute("value").toInt();
-                        else if (e.attribute("name") == "in") fade += e.attribute("value").toInt();
-                    } else {
-                        QDomElement fadeout = m_effectList.getEffectByTag(QString(), "fade_to_black");
-                        if (fadeout.attribute("name") == "out") fade -= fadeout.attribute("value").toInt();
-                        else if (fadeout.attribute("name") == "in") fade += fadeout.attribute("value").toInt();
-                    }
-                } else if (effectId == "fade_to_black") {
-                    needRepaint = true;
-                    if (m_effectList.hasEffect(QString(), "fadeout") == -1) {
-                        if (e.attribute("name") == "out") fade -= e.attribute("value").toInt();
-                        else if (e.attribute("name") == "in") fade += e.attribute("value").toInt();
-                    } else {
-                        QDomElement fadeout = m_effectList.getEffectByTag(QString(), "fadeout");
-                        if (fadeout.attribute("name") == "out") fade -= fadeout.attribute("value").toInt();
-                        else if (fadeout.attribute("name") == "in") fade += fadeout.attribute("value").toInt();
-                    }
-                }
             } else {
                 double fact;
                 if (e.attribute("factor").contains('%')) {
@@ -1920,7 +1931,10 @@ QMap<int, QDomElement> ClipItem::adjustEffectsToDuration(int width, int height, 
             int frame = EffectsList::parameter(effect, "frame").toInt();
             EffectsList::setParameter(effect, "frame", QString::number(frame - diff));
             continue;
-        }
+        } else if (effect.attribute("id") == "pan_zoom") {
+	    effect.setAttribute("in", cropStart().frames(m_fps));
+	    effect.setAttribute("out", (cropStart() + cropDuration()).frames(m_fps) - 1);
+	}
 
         QDomNodeList params = effect.elementsByTagName("parameter");
         for (int j = 0; j < params.count(); j++) {
@@ -1934,7 +1948,7 @@ QMap<int, QDomElement> ClipItem::adjustEffectsToDuration(int width, int height, 
             } else if (type == "simplekeyframe" || type == "keyframe") {
                 if (!effects.contains(i))
                     effects[i] = effect.cloneNode().toElement();
-                updateNormalKeyframes(param);
+                updateNormalKeyframes(param, oldInfo);
 #ifdef USE_QJSON
             } else if (type == "roto-spline") {
                 if (!effects.contains(i))
@@ -1949,16 +1963,25 @@ QMap<int, QDomElement> ClipItem::adjustEffectsToDuration(int width, int height, 
     return effects;
 }
 
-bool ClipItem::updateNormalKeyframes(QDomElement parameter)
+bool ClipItem::updateNormalKeyframes(QDomElement parameter, ItemInfo oldInfo)
 {
     int in = cropStart().frames(m_fps);
     int out = (cropStart() + cropDuration()).frames(m_fps) - 1;
+    int oldin = oldInfo.cropStart.frames(m_fps);
     QLocale locale;
+    bool keyFrameUpdated = false;
 
     const QStringList data = parameter.attribute("keyframes").split(';', QString::SkipEmptyParts);
     QMap <int, double> keyframes;
-    foreach (QString keyframe, data)
-        keyframes[keyframe.section(':', 0, 0).toInt()] = locale.toDouble(keyframe.section(':', 1, 1));
+    foreach (QString keyframe, data) {
+	int keyframepos = keyframe.section(':', 0, 0).toInt();
+	// if keyframe was at clip start, update it
+	if (keyframepos == oldin) {
+	    keyframepos = in;
+	    keyFrameUpdated = true;
+	}
+        keyframes[keyframepos] = locale.toDouble(keyframe.section(':', 1, 1));
+    }
 
 
     QMap<int, double>::iterator i = keyframes.end();
@@ -2010,7 +2033,7 @@ bool ClipItem::updateNormalKeyframes(QDomElement parameter)
             ++i;
     }
 
-    if (startFound || endFound) {
+    if (startFound || endFound || keyFrameUpdated) {
         QString newkfr;
         QMap<int, double>::const_iterator k = keyframes.constBegin();
         while (k != keyframes.constEnd()) {
@@ -2026,7 +2049,6 @@ bool ClipItem::updateNormalKeyframes(QDomElement parameter)
 
 void ClipItem::updateGeometryKeyframes(QDomElement effect, int paramIndex, int width, int height, ItemInfo oldInfo)
 {
-
     QDomElement param = effect.elementsByTagName("parameter").item(paramIndex).toElement();
     int offset = oldInfo.cropStart.frames(m_fps);
     QString data = param.attribute("value");
