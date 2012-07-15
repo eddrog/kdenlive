@@ -260,7 +260,7 @@ void Render::buildConsumer(const QString &profileName)
         m_mltConsumer->set("preview_format", mlt_image_rgb24a);
         m_showFrameEvent = m_mltConsumer->listen("consumer-frame-show", this, (mlt_listener) consumer_gl_frame_show);
     } else {
-        m_mltConsumer = new Mlt::Consumer(*m_mltProfile, "sdl_preview");
+        m_mltConsumer = new Mlt::FilteredConsumer(*m_mltProfile, "sdl_preview");
         m_showFrameEvent = m_mltConsumer->listen("consumer-frame-show", this, (mlt_listener) consumer_frame_show);
         m_pauseEvent = m_mltConsumer->listen("consumer-sdl-paused", this, (mlt_listener) consumer_paused);
         m_mltConsumer->set("window_id", m_winid);
