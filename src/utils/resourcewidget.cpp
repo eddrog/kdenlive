@@ -221,7 +221,7 @@ void ResourceWidget::slotSaveItem(const QString originalUrl)
     if (!path.endsWith('/')) path.append('/');
     if (!originalUrl.isEmpty()) {
         path.append(KUrl(originalUrl).fileName());
-        ext = "*." + KUrl(originalUrl).fileName().section(".", -1);
+        ext = "*." + KUrl(originalUrl).fileName().section('.', -1);
         m_currentInfo.itemDownload = originalUrl;
     }
     else {
@@ -398,3 +398,4 @@ void ResourceWidget::updateLayout()
     if (!m_meta.isEmpty()) content.append(m_meta);
     info_browser->setHtml(content);
 }
+

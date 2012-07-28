@@ -518,7 +518,7 @@ ClipProperties::ClipProperties(QList <DocClipBase *>cliplist, Timecode tc, QMap 
     setFont(KGlobalSettings::toolBarFont());
     m_view.setupUi(this);
     QString title = windowTitle();
-    title.append(" " + i18np("(%1 clip)", "(%1 clips)", cliplist.count()));
+    title.append(' ' + i18np("(%1 clip)", "(%1 clips)", cliplist.count()));
     setWindowTitle(title);
     QMap <QString, QString> props = cliplist.at(0)->properties();
     m_old_props = commonproperties;
@@ -718,11 +718,13 @@ void ClipProperties::slotFillMarkersList()
 void ClipProperties::slotAddMarker()
 {
     CommentedTime marker(GenTime(), i18n("Marker"));
-    MarkerDialog d(m_clip, marker, m_tc, i18n("Add Marker"), this);
-    if (d.exec() == QDialog::Accepted) {
-        emit addMarker(m_clip->getId(), d.newMarker().time(), d.newMarker().comment());
+    QPointer<MarkerDialog> d = new MarkerDialog(m_clip, marker,
+                                          m_tc, i18n("Add Marker"), this);
+    if (d->exec() == QDialog::Accepted) {
+        emit addMarker(m_clip->getId(), d->newMarker().time(), d->newMarker().comment());
     }
     QTimer::singleShot(500, this, SLOT(slotFillMarkersList()));
+    delete d;
 }
 
 void ClipProperties::slotEditMarker()
@@ -1003,7 +1005,7 @@ void ClipProperties::parseFolder()
         QString filter = KUrl(m_view.clip_path->text()).fileName();
         QString ext = filter.section('.', -1);
         filter = filter.section('%', 0, -2);
-        QString regexp = "^" + filter + "\\d+\\." + ext + "$";
+        QString regexp = '^' + filter + "\\d+\\." + ext + '$';
         QRegExp rx(regexp);
         QStringList entries;
         foreach(const QString & path, result) {

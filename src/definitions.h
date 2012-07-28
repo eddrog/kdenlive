@@ -70,7 +70,8 @@ enum TRACKTYPE { AUDIOTRACK = 0, VIDEOTRACK = 1 };
 
 enum CLIPJOBSTATUS { NOJOB = 0, JOBWAITING = -1, JOBWORKING = -2, JOBDONE = -3, JOBCRASHED = -4, JOBABORTED = -5};
 
-struct TrackInfo {
+class TrackInfo {
+public:
     TRACKTYPE type;
     QString trackName;
     bool isMute;
@@ -78,12 +79,19 @@ struct TrackInfo {
     bool isLocked;
     EffectsList effectsList;
     int duration;
+    TrackInfo() :
+        type(VIDEOTRACK),
+        isMute(0),
+        isBlind(0),
+        isLocked(0),
+        duration(0) {};
 };
 
 typedef QMap<QString, QString> stringMap;
 typedef QMap <int, QMap <int, QByteArray> > audioByteArray;
 
-struct ItemInfo {
+class ItemInfo {
+public:
     /** startPos is the position where the clip starts on the track */
     GenTime startPos;
     /** endPos is the duration where the clip ends on the track */
@@ -93,9 +101,11 @@ struct ItemInfo {
     /** cropDuration is the duration of the clip */
     GenTime cropDuration;
     int track;
+    ItemInfo() : track(0) {};
 };
 
-struct TransitionInfo {
+class TransitionInfo {
+public:
 /** startPos is the position where the clip starts on the track */
     GenTime startPos;
     /** endPos is the duration where the clip ends on the track */
@@ -106,9 +116,14 @@ struct TransitionInfo {
     int a_track;
     /** Does the user request for a special a_track */
     bool forceTrack;
+    TransitionInfo() :
+        b_track(0),
+        a_track(0),
+        forceTrack(0) {};
 };
 
-struct MltVideoProfile {
+class MltVideoProfile {
+public:
     QString path;
     QString description;
     int frame_rate_num;
@@ -121,6 +136,17 @@ struct MltVideoProfile {
     int display_aspect_num;
     int display_aspect_den;
     int colorspace;
+    MltVideoProfile() :
+        frame_rate_num(0),
+        frame_rate_den(0),
+        width(0),
+        height(0),
+        progressive(0),
+        sample_aspect_num(0),
+        sample_aspect_den(0),
+        display_aspect_num(0),
+        display_aspect_den(0),
+        colorspace(0) {};
     bool operator==(const MltVideoProfile& point) const
     {
         if (!description.isEmpty() && point.description  == description) return true;

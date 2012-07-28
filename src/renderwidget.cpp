@@ -459,7 +459,7 @@ void RenderWidget::slotSaveProfile()
     if (customGroup.isEmpty()) customGroup = i18nc("Group Name", "Custom");
     ui.group_name->setText(customGroup);
 
-    QStringList arguments = m_view.advanced_params->toPlainText().split(" ", QString::SkipEmptyParts);
+    QStringList arguments = m_view.advanced_params->toPlainText().split(' ', QString::SkipEmptyParts);
     ui.parameters->setText(arguments.join(" "));
     ui.extension->setText(m_view.size_list->currentItem()->data(ExtensionRole).toString());
     ui.profile_name->setFocus();
@@ -843,7 +843,7 @@ void RenderWidget::slotExport(bool scriptExport, int zoneIn, int zoneOut, const 
     QString extension = item->data(ExtensionRole).toString();
     if (!dest.endsWith(extension, Qt::CaseInsensitive)) {
         if (KMessageBox::questionYesNo(this, i18n("File has no extension. Add extension (%1)?", extension)) == KMessageBox::Yes) {
-            dest.append("." + extension);
+            dest.append('.' + extension);
         }
     }
 
@@ -952,7 +952,7 @@ void RenderWidget::slotExport(bool scriptExport, int zoneIn, int zoneOut, const 
         renderArgs.append(subsize);
     }
     bool resizeProfile = (subsize != currentSize);
-    QStringList paramsList = renderArgs.split(" ", QString::SkipEmptyParts);
+    QStringList paramsList = renderArgs.split(' ', QString::SkipEmptyParts);
 
     QScriptEngine sEngine;
     sEngine.globalObject().setProperty("bitrate", m_view.comboBitrates->currentText());
@@ -1426,7 +1426,7 @@ void RenderWidget::refreshParams()
         m_view.bitrateLabel->setEnabled(true);
         if ( item->data(BitratesRole).canConvert(QVariant::StringList) && item->data(BitratesRole).toStringList().count()) {
             QStringList bitrates = item->data(BitratesRole).toStringList();
-            foreach (QString bitrate, bitrates)
+            foreach (const QString &bitrate, bitrates)
                 m_view.comboBitrates->addItem(bitrate);
             if (item->data(DefaultBitrateRole).canConvert(QVariant::String))
                 m_view.comboBitrates->setCurrentIndex(bitrates.indexOf(item->data(DefaultBitrateRole).toString()));
@@ -1443,7 +1443,7 @@ void RenderWidget::refreshParams()
         m_view.audiobitrateLabel->setEnabled(true);
         if ( item->data(AudioBitratesRole).canConvert(QVariant::StringList) && item->data(AudioBitratesRole).toStringList().count()) {
             QStringList audiobitrates = item->data(AudioBitratesRole).toStringList();
-            foreach (QString bitrate, audiobitrates)
+            foreach (const QString &bitrate, audiobitrates)
                 m_view.comboAudioBitrates->addItem(bitrate);
             if (item->data(DefaultAudioBitrateRole).canConvert(QVariant::String))
                 m_view.comboAudioBitrates->setCurrentIndex(audiobitrates.indexOf(item->data(DefaultAudioBitrateRole).toString()));

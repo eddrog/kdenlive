@@ -38,13 +38,14 @@ MeltJob::MeltJob(CLIPTYPE cType, const QString &id, QStringList parameters) : Ab
     m_producer(NULL),
     m_profile(NULL),
     m_consumer(NULL),
+    m_showFrameEvent(NULL),
     m_length(0)
 {
     jobStatus = JOBWAITING;
     m_params = parameters;
     description = i18n("Process clip");
     QString consum = m_params.at(5);
-    if (consum.contains(":")) m_dest = consum.section(":", 1);
+    if (consum.contains(':')) m_dest = consum.section(':', 1);
 }
 
 void MeltJob::setProducer(Mlt::Producer *producer)
@@ -66,7 +67,7 @@ void MeltJob::startJob()
     QString filterParams = m_params.takeFirst();
     QString consumer = m_params.takeFirst();
     kDebug()<<"consumer: "<<consumer;
-    if (consumer.contains(":")) m_dest = consumer.section(":", 1);
+    if (consumer.contains(':')) m_dest = consumer.section(':', 1);
     QString consumerParams = m_params.takeFirst();
     
     // optional params
@@ -96,14 +97,14 @@ void MeltJob::startJob()
     else 
         prod = m_producer->cut(in, out);
     QStringList list = producerParams.split(' ', QString::SkipEmptyParts);
-    foreach(QString data, list) {
+    foreach(const QString &data, list) {
         if (data.contains('=')) {
             prod->set(data.section('=', 0, 0).toUtf8().constData(), data.section('=', 1, 1).toUtf8().constData());
         }
     }
 
     if (consumer.contains(":")) {
-        m_consumer = new Mlt::Consumer(*m_profile, consumer.section(":", 0, 0).toUtf8().constData(), consumer.section(":", 1).toUtf8().constData());
+        m_consumer = new Mlt::Consumer(*m_profile, consumer.section(':', 0, 0).toUtf8().constData(), consumer.section(':', 1).toUtf8().constData());
     }
     else {
         m_consumer = new Mlt::Consumer(*m_profile, consumer.toUtf8().constData());
@@ -119,7 +120,7 @@ void MeltJob::startJob()
     m_consumer->set("real_time", -KdenliveSettings::mltthreads() );
 
     list = consumerParams.split(' ', QString::SkipEmptyParts);
-    foreach(QString data, list) {
+    foreach(const QString &data, list) {
         if (data.contains('=')) {
             kDebug()<<"// filter con: "<<data;
             m_consumer->set(data.section('=', 0, 0).toUtf8().constData(), data.section('=', 1, 1).toUtf8().constData());
@@ -128,7 +129,7 @@ void MeltJob::startJob()
     
     Mlt::Filter mltFilter(*m_profile, filter.toUtf8().data());
     list = filterParams.split(' ', QString::SkipEmptyParts);
-    foreach(QString data, list) {
+    foreach(const QString &data, list) {
         if (data.contains('=')) {
             kDebug()<<"// filter p: "<<data;
             mltFilter.set(data.section('=', 0, 0).toUtf8().constData(), data.section('=', 1, 1).toUtf8().constData());
@@ -150,7 +151,7 @@ void MeltJob::startJob()
     m_consumer->stop();
     QStringList wanted = properties.split(',', QString::SkipEmptyParts);
     stringMap jobResults;
-    foreach(const QString key, wanted) {
+    foreach(const QString &key, wanted) {
         QString value = mltFilter.get(key.toUtf8().constData());
         jobResults.insert(key, value);
     }
@@ -199,3 +200,4 @@ void MeltJob::emitFrameNumber()
         emit jobProgress(m_clipId, (int) (100 * m_consumer->position() / m_length), jobType);
     }
 }
+

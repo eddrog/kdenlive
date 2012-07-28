@@ -147,7 +147,7 @@ QStringList ClipStabilize::params()
     QHashIterator <QString,QHash<QString,QString> > it(m_ui_params);
     while (it.hasNext()){
         it.next();
-        filterparamsList << it.key() + "=" + it.value().value("value");
+        filterparamsList << it.key() + '=' + it.value().value("value");
     }
     params << filterparamsList.join(" ");
     
@@ -233,7 +233,7 @@ void ClipStabilize::slotUpdateParams()
     for (int i=0;i<vbox->count();i++){
         QWidget* w=vbox->itemAt(i)->widget();
         QString name=w->objectName();
-        if (name !="" && m_ui_params.contains(name)){
+        if (!name.isEmpty() && m_ui_params.contains(name)){
             if (m_ui_params[name]["type"]=="int" || m_ui_params[name]["type"]=="double"){
                 DoubleParameterWidget *dbl=(DoubleParameterWidget*)w;
                 m_ui_params[name]["value"]=QString::number((double)(dbl->getValue()));
@@ -256,7 +256,7 @@ void ClipStabilize::fillParameters(QStringList lst)
     m_ui_params.clear();
     while (!lst.isEmpty()){
         QString vallist=lst.takeFirst();
-        QStringList cont=vallist.split(",");
+        QStringList cont=vallist.split(',');
         QString name=cont.takeFirst();
         while (!cont.isEmpty()){
             QString valname=cont.takeFirst();

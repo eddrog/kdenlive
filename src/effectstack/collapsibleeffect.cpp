@@ -81,7 +81,7 @@ CollapsibleEffect::CollapsibleEffect(QDomElement effect, QDomElement original_ef
     QDomElement namenode = m_effect.firstChildElement("name");
     if (namenode.isNull()) return;
     QString effectname = i18n(namenode.text().toUtf8().data());
-    if (m_regionEffect) effectname.append(":" + KUrl(EffectsList::parameter(m_effect, "resource")).fileName());
+    if (m_regionEffect) effectname.append(':' + KUrl(EffectsList::parameter(m_effect, "resource")).fileName());
     
     QHBoxLayout *l = static_cast <QHBoxLayout *>(frame->layout());
     title = new QLabel(this);
@@ -154,7 +154,7 @@ void CollapsibleEffect::slotCreateRegion()
 {
     QString allExtensions = ProjectList::getExtensions();
     const QString dialogFilter = allExtensions + ' ' + QLatin1Char('|') + i18n("All Supported Files") + "\n* " + QLatin1Char('|') + i18n("All Files");
-    KFileDialog *d = new KFileDialog(KUrl("kfiledialog:///clipfolder"), dialogFilter, kapp->activeWindow());
+    QPointer<KFileDialog> d = new KFileDialog(KUrl("kfiledialog:///clipfolder"), dialogFilter, kapp->activeWindow());
     d->setOperationMode(KFileDialog::Opening);
     d->setMode(KFile::File);
     if (d->exec() == QDialog::Accepted) {

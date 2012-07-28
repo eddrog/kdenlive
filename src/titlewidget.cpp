@@ -512,7 +512,7 @@ TitleWidget::TitleWidget(KUrl url, Timecode tc, QString projectTitlePath, Render
     //templateBox->setIconSize(QSize(60,60));
     templateBox->clear();
     templateBox->addItem("");
-    foreach(TitleTemplate t, titletemplates) {
+    foreach(const TitleTemplate &t, titletemplates) {
         templateBox->addItem(t.icon, t.name, t.file);
     }
     lastDocumentHash = QCryptographicHash::hash(xml().toString().toAscii(), QCryptographicHash::Md5).toHex();
@@ -635,7 +635,7 @@ void TitleWidget::refreshTitleTemplates()
 void TitleWidget::templateIndexChanged(int index)
 {
     QString item = templateBox->itemData(index).toString();
-    if (item != "") {
+    if (!item.isEmpty()) {
         if (lastDocumentHash != QCryptographicHash::hash(xml().toString().toAscii(), QCryptographicHash::Md5).toHex()) {
             if (KMessageBox::questionYesNo(this, i18n("Do you really want to load a new template? Changes in this title will be lost!")) == KMessageBox::No) return;
         }
@@ -1847,13 +1847,13 @@ void TitleWidget::saveTitle(KUrl url)
         embed_image=true;	
     }
     if (url.isEmpty()) {
-        KFileDialog *fs = new KFileDialog(KUrl(m_projectTitlePath), "application/x-kdenlivetitle", this);
+        QPointer<KFileDialog> fs = new KFileDialog(KUrl(m_projectTitlePath), "application/x-kdenlivetitle", this);
         fs->setOperationMode(KFileDialog::Saving);
         fs->setMode(KFile::File);
         fs->setConfirmOverwrite(true);
         fs->setKeepLocation(true);
         fs->exec();
-        url = fs->selectedUrl();
+        if (fs) url = fs->selectedUrl();
         delete fs;
     }
     if (!url.isEmpty()) {
@@ -2248,7 +2248,7 @@ void TitleWidget::slotAddEffect(int ix)
              * element, but do not add it to non-text elements.
              */
             if (item->type() == TEXTITEM) {
-                QStringList effdata = QStringList() << "typewriter" << QString::number(typewriter_delay->value()) + ";" + QString::number(typewriter_start->value());
+                QStringList effdata = QStringList() << "typewriter" << QString::number(typewriter_delay->value()) + ';' + QString::number(typewriter_start->value());
                 item->setData(100, effdata);
             }
             break;
@@ -2281,7 +2281,7 @@ void TitleWidget::slotEditTypewriter(int /*ix*/)
 {
     QList<QGraphicsItem*> l = graphicsView->scene()->selectedItems();
     if (l.size() == 1) {
-        QStringList effdata = QStringList() << "typewriter" << QString::number(typewriter_delay->value()) + ";" + QString::number(typewriter_start->value());
+        QStringList effdata = QStringList() << "typewriter" << QString::number(typewriter_delay->value()) + ';' + QString::number(typewriter_start->value());
         l[0]->setData(100, effdata);
     }
 }

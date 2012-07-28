@@ -1356,14 +1356,15 @@ void CustomTrackView::editItemDuration()
         else
             getClipAvailableSpace(item, minimum, maximum);
 
-        ClipDurationDialog d(item, m_document->timecode(), minimum, maximum, this);
-        if (d.exec() == QDialog::Accepted) {
+        QPointer<ClipDurationDialog> d = new ClipDurationDialog(item,
+                               m_document->timecode(), minimum, maximum, this);
+        if (d->exec() == QDialog::Accepted) {
             ItemInfo clipInfo = item->info();
             ItemInfo startInfo = clipInfo;
             if (item->type() == TRANSITIONWIDGET) {
                 // move & resize transition
-                clipInfo.startPos = d.startPos();
-                clipInfo.endPos = clipInfo.startPos + d.duration();
+                clipInfo.startPos = d->startPos();
+                clipInfo.endPos = clipInfo.startPos + d->duration();
                 clipInfo.track = item->track();
                 MoveTransitionCommand *command = new MoveTransitionCommand(this, startInfo, clipInfo, true);
                 updateTrackDuration(clipInfo.track, command);
@@ -1373,10 +1374,10 @@ void CustomTrackView::editItemDuration()
                 ClipItem *clip = static_cast<ClipItem *>(item);
                 QUndoCommand *moveCommand = new QUndoCommand();
                 moveCommand->setText(i18n("Edit clip"));
-                if (d.duration() < item->cropDuration() || d.cropStart() != clipInfo.cropStart) {
+                if (d->duration() < item->cropDuration() || d->cropStart() != clipInfo.cropStart) {
                     // duration was reduced, so process it first
-                    clipInfo.endPos = clipInfo.startPos + d.duration();
-                    clipInfo.cropStart = d.cropStart();
+                    clipInfo.endPos = clipInfo.startPos + d->duration();
+                    clipInfo.cropStart = d->cropStart();
 
                     resizeClip(startInfo, clipInfo);
                     new ResizeClipCommand(this, startInfo, clipInfo, false, true, moveCommand);
@@ -1384,18 +1385,18 @@ void CustomTrackView::editItemDuration()
                     new ResizeClipCommand(this, startInfo, clipInfo, false, true, moveCommand);
                 }
 
-                if (d.startPos() != clipInfo.startPos) {
+                if (d->startPos() != clipInfo.startPos) {
                     startInfo = clipInfo;
-                    clipInfo.startPos = d.startPos();
+                    clipInfo.startPos = d->startPos();
                     clipInfo.endPos = item->endPos() + (clipInfo.startPos - startInfo.startPos);
                     new MoveClipCommand(this, startInfo, clipInfo, true, moveCommand);
                 }
 
-                if (d.duration() > item->cropDuration()) {
+                if (d->duration() > item->cropDuration()) {
                     // duration was increased, so process it after move
                     startInfo = clipInfo;
-                    clipInfo.endPos = clipInfo.startPos + d.duration();
-                    clipInfo.cropStart = d.cropStart();
+                    clipInfo.endPos = clipInfo.startPos + d->duration();
+                    clipInfo.cropStart = d->cropStart();
 
                     resizeClip(startInfo, clipInfo);
                     new ResizeClipCommand(this, startInfo, clipInfo, false, true, moveCommand);
@@ -1406,6 +1407,7 @@ void CustomTrackView::editItemDuration()
                 m_commandStack->push(moveCommand);
             }
         }
+        delete d;
     } else {
         emit displayMessage(i18n("Item is locked"), ErrorMessage);
     }
@@ -3074,15 +3076,19 @@ void CustomTrackView::slotRemoveSpace()
     if (m_menuPosition.isNull()) {
         pos = GenTime(cursorPos(), m_document->fps());
 
-        TrackDialog d(m_document, parentWidget());
-        d.comboTracks->setCurrentIndex(m_selectedTrack);
-        d.label->setText(i18n("Track"));
-        d.before_select->setHidden(true);
-        d.setWindowTitle(i18n("Remove Space"));
-        d.video_track->setHidden(true);
-        d.audio_track->setHidden(true);
-        if (d.exec() != QDialog::Accepted) return;
-        track = d.comboTracks->currentIndex();
+        QPointer<TrackDialog> d = new TrackDialog(m_document, parentWidget());
+        d->comboTracks->setCurrentIndex(m_selectedTrack);
+        d->label->setText(i18n("Track"));
+        d->before_select->setHidden(true);
+        d->setWindowTitle(i18n("Remove Space"));
+        d->video_track->setHidden(true);
+        d->audio_track->setHidden(true);
+        if (d->exec() != QDialog::Accepted) {
+            delete d;
+            return;
+        }
+        track = d->comboTracks->currentIndex();
+        delete d;
     } else {
         pos = GenTime((int)(mapToScene(m_menuPosition).x()), m_document->fps());
         track = (int)(mapToScene(m_menuPosition).y() / m_tracksHeight);
@@ -3177,10 +3183,15 @@ void CustomTrackView::slotInsertSpace()
         pos = GenTime((int)(mapToScene(m_menuPosition).x()), m_document->fps());
         track = (int)(mapToScene(m_menuPosition).y() / m_tracksHeight) + 1;
     }
-    SpacerDialog d(GenTime(65, m_document->fps()), m_document->timecode(), track, m_document->tracksList(), this);
-    if (d.exec() != QDialog::Accepted) return;
-    GenTime spaceDuration = d.selectedDuration();
-    track = d.selectedTrack();
+    QPointer<SpacerDialog> d = new SpacerDialog(GenTime(65, m_document->fps()),
+                m_document->timecode(), track, m_document->tracksList(), this);
+    if (d->exec() != QDialog::Accepted) {
+        delete d;
+        return;
+    }
+    GenTime spaceDuration = d->selectedDuration();
+    track = d->selectedTrack();
+    delete d;
 
     QList<QGraphicsItem *> items;
     if (track >= 0) {
@@ -5197,7 +5208,7 @@ void CustomTrackView::buildGuidesMenu(QMenu *goMenu) const
     goMenu->clear();
     double fps = m_document->fps();
     for (int i = 0; i < m_guides.count(); i++) {
-        act = goMenu->addAction(m_guides.at(i)->label() + "/" + Timecode::getStringTimecode(m_guides.at(i)->position().frames(fps), fps));
+        act = goMenu->addAction(m_guides.at(i)->label() + '/' + Timecode::getStringTimecode(m_guides.at(i)->position().frames(fps), fps));
         act->setData(m_guides.at(i)->position().frames(m_document->fps()));
     }
     goMenu->setEnabled(!m_guides.isEmpty());
@@ -5251,10 +5262,14 @@ void CustomTrackView::slotAddGuide(bool dialog)
 {
     CommentedTime marker(GenTime(m_cursorPos, m_document->fps()), i18n("Guide"));
     if (dialog) {
-        MarkerDialog d(NULL, marker, m_document->timecode(), i18n("Add Guide"), this);
-        if (d.exec() != QDialog::Accepted) return;
-        marker = d.newMarker();
-        
+        QPointer<MarkerDialog> d = new MarkerDialog(NULL, marker,
+                             m_document->timecode(), i18n("Add Guide"), this);
+        if (d->exec() != QDialog::Accepted) {
+            delete d;
+            return;
+        }
+        marker = d->newMarker();
+        delete d;
     } else {
         marker.setComment(m_document->timecode().getDisplayTimecodeFromFrames(m_cursorPos, false));
     }
@@ -5282,11 +5297,12 @@ void CustomTrackView::slotEditGuide(int guidePos)
 
 void CustomTrackView::slotEditGuide(CommentedTime guide)
 {
-    MarkerDialog d(NULL, guide, m_document->timecode(), i18n("Edit Guide"), this);
-    if (d.exec() == QDialog::Accepted) {
-        EditGuideCommand *command = new EditGuideCommand(this, guide.time(), guide.comment(), d.newMarker().time(), d.newMarker().comment(), true);
+    QPointer<MarkerDialog> d = new MarkerDialog(NULL, guide, m_document->timecode(), i18n("Edit Guide"), this);
+    if (d->exec() == QDialog::Accepted) {
+        EditGuideCommand *command = new EditGuideCommand(this, guide.time(), guide.comment(), d->newMarker().time(), d->newMarker().comment(), true);
         m_commandStack->push(command);
     }
+    delete d;
 }
 
 
@@ -5294,11 +5310,13 @@ void CustomTrackView::slotEditTimeLineGuide()
 {
     if (m_dragGuide == NULL) return;
     CommentedTime guide = m_dragGuide->info();
-    MarkerDialog d(NULL, guide, m_document->timecode(), i18n("Edit Guide"), this);
-    if (d.exec() == QDialog::Accepted) {
-        EditGuideCommand *command = new EditGuideCommand(this, guide.time(), guide.comment(), d.newMarker().time(), d.newMarker().comment(), true);
+    QPointer<MarkerDialog> d = new MarkerDialog(NULL, guide,
+                     m_document->timecode(), i18n("Edit Guide"), this);
+    if (d->exec() == QDialog::Accepted) {
+        EditGuideCommand *command = new EditGuideCommand(this, guide.time(), guide.comment(), d->newMarker().time(), d->newMarker().comment(), true);
         m_commandStack->push(command);
     }
+    delete d;
 }
 
 void CustomTrackView::slotDeleteGuide(int guidePos)
@@ -5736,7 +5754,7 @@ void CustomTrackView::adjustKeyfames(GenTime oldstart, GenTime newstart, GenTime
         if (!e.isNull() && (e.attribute("type") == "keyframe" || e.attribute("type") == "simplekeyframe")) {
             QString def = e.attribute("default");
             // Effect has a keyframe type parameter, we need to adjust the values
-            QStringList keys = e.attribute("keyframes").split(";", QString::SkipEmptyParts);
+            QStringList keys = e.attribute("keyframes").split(';', QString::SkipEmptyParts);
             QStringList newKeyFrames;
             foreach(const QString &str, keys) {
                 int pos = str.section(':', 0, 0).toInt();
@@ -5915,21 +5933,21 @@ void CustomTrackView::saveThumbnails()
 
 void CustomTrackView::slotInsertTrack(int ix)
 {
-    TrackDialog d(m_document, parentWidget());
-    d.comboTracks->setCurrentIndex(ix);
-    d.label->setText(i18n("Insert track"));
-    d.setWindowTitle(i18n("Insert New Track"));
+    QPointer<TrackDialog> d = new TrackDialog(m_document, parentWidget());
+    d->comboTracks->setCurrentIndex(ix);
+    d->label->setText(i18n("Insert track"));
+    d->setWindowTitle(i18n("Insert New Track"));
 
-    if (d.exec() == QDialog::Accepted) {
-        ix = d.comboTracks->currentIndex();
-        if (d.before_select->currentIndex() == 1)
+    if (d->exec() == QDialog::Accepted) {
+        ix = d->comboTracks->currentIndex();
+        if (d->before_select->currentIndex() == 1)
             ix++;
         TrackInfo info;
         info.duration = 0;
         info.isMute = false;
         info.isLocked = false;
 	info.effectsList = EffectsList(true);
-        if (d.video_track->isChecked()) {
+        if (d->video_track->isChecked()) {
             info.type = VIDEOTRACK;
             info.isBlind = false;
         } else {
@@ -5940,41 +5958,45 @@ void CustomTrackView::slotInsertTrack(int ix)
         m_commandStack->push(addTrack);
         setDocumentModified();
     }
+    delete d;
 }
 
 void CustomTrackView::slotDeleteTrack(int ix)
 {
     if (m_document->tracksCount() < 2) return;
-    TrackDialog d(m_document, parentWidget());
-    d.comboTracks->setCurrentIndex(ix);
-    d.label->setText(i18n("Delete track"));
-    d.before_select->setHidden(true);
-    d.setWindowTitle(i18n("Delete Track"));
-    d.video_track->setHidden(true);
-    d.audio_track->setHidden(true);
-    if (d.exec() == QDialog::Accepted) {
-        ix = d.comboTracks->currentIndex();
+    QPointer<TrackDialog> d = new TrackDialog(m_document, parentWidget());
+    d->comboTracks->setCurrentIndex(ix);
+    d->label->setText(i18n("Delete track"));
+    d->before_select->setHidden(true);
+    d->setWindowTitle(i18n("Delete Track"));
+    d->video_track->setHidden(true);
+    d->audio_track->setHidden(true);
+    if (d->exec() == QDialog::Accepted) {
+        ix = d->comboTracks->currentIndex();
         TrackInfo info = m_document->trackInfoAt(m_document->tracksCount() - ix - 1);
         deleteTimelineTrack(ix, info);
         setDocumentModified();
         /*AddTrackCommand* command = new AddTrackCommand(this, ix, info, false);
         m_commandStack->push(command);*/
     }
+    delete d;
 }
 
 void CustomTrackView::slotConfigTracks(int ix)
 {
-    TracksConfigDialog d(m_document, ix, parentWidget());
-    if (d.exec() == QDialog::Accepted) {
-        ConfigTracksCommand *configTracks = new ConfigTracksCommand(this, m_document->tracksList(), d.tracksList());
+    QPointer<TracksConfigDialog> d = new TracksConfigDialog(m_document,
+                                                        ix, parentWidget());
+    if (d->exec() == QDialog::Accepted) {
+        ConfigTracksCommand *configTracks = new ConfigTracksCommand(this, m_document->tracksList(), d->tracksList());
         m_commandStack->push(configTracks);
-        QList <int> toDelete = d.deletedTracks();
+        QList <int> toDelete = d->deletedTracks();
         for (int i = 0; i < toDelete.count(); ++i) {
             TrackInfo info = m_document->trackInfoAt(m_document->tracksCount() - toDelete.at(i) + i - 1);
             deleteTimelineTrack(toDelete.at(i) - i, info);
         }
         setDocumentModified();
     }
+    delete d;
 }
 
 void CustomTrackView::deleteTimelineTrack(int ix, TrackInfo trackinfo)
@@ -7004,13 +7026,13 @@ void CustomTrackView::adjustEffectParameters(EffectsParameterList &parameters, Q
             parameters.addParam("_sync_in_out", "1");
         }
         if (e.attribute("type") == "simplekeyframe") {
-            QStringList values = e.attribute("keyframes").split(";", QString::SkipEmptyParts);
+            QStringList values = e.attribute("keyframes").split(';', QString::SkipEmptyParts);
             double factor = e.attribute("factor", "1").toDouble();
             double offset = e.attribute("offset", "0").toDouble();
             for (int j = 0; j < values.count(); j++) {
                 QString pos = values.at(j).section(':', 0, 0);
                 double val = (values.at(j).section(':', 1, 1).toDouble() - offset) / factor;
-                values[j] = pos + "=" + locale.toString(val);
+                values[j] = pos + '=' + locale.toString(val);
             }
             // kDebug() << "/ / / /SENDING KEYFR:" << values;
             parameters.addParam(paramname, values.join(";"));

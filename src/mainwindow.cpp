@@ -400,11 +400,11 @@ MainWindow::MainWindow(const QString &MltPath, const KUrl & Url, const QString &
     m_loadLayout = new KSelectAction(i18n("Load Layout"), actionCollection());
     for (int i = 1; i < 5; i++) {
         KAction *load = new KAction(KIcon(), i18n("Layout %1", i), this);
-        load->setData("_" + QString::number(i));
+        load->setData('_' + QString::number(i));
 	layoutActions->addAction("load_layout" + QString::number(i), load);
         m_loadLayout->addAction(load);
         KAction *save = new KAction(KIcon(), i18n("Save As Layout %1", i), this);
-        save->setData("_" + QString::number(i));
+        save->setData('_' + QString::number(i));
         layoutActions->addAction("save_layout" + QString::number(i), save);
     }
     // Required to enable user to add the load layout action to toolbar
@@ -589,7 +589,7 @@ MainWindow::MainWindow(const QString &MltPath, const KUrl & Url, const QString &
     if (!clipsToLoad.isEmpty() && m_activeDocument) {
         QStringList list = clipsToLoad.split(',');
         QList <QUrl> urls;
-        foreach(QString path, list) {
+        foreach(const QString &path, list) {
             kDebug() << QDir::current().absoluteFilePath(path);
             urls << QUrl::fromLocalFile(QDir::current().absoluteFilePath(path));
         }
@@ -1757,16 +1757,16 @@ void MainWindow::loadLayouts()
         foreach(const QString & key, entries) {
             if (key.endsWith(QString("_%1").arg(i))) {
                 // Found previously saved layout
-                QString layoutName = key.section("_", 0, -2);
+                QString layoutName = key.section('_', 0, -2);
                 for (int j = 0; j < loadActions.count(); j++) {
-                    if (loadActions.at(j)->data().toString().endsWith("_" + QString::number(i))) {
+                    if (loadActions.at(j)->data().toString().endsWith('_' + QString::number(i))) {
                         loadActions[j]->setText(layoutName);
                         loadActions[j]->setData(key);
                         break;
                     }
                 }
                 for (int j = 0; j < saveActions.count(); j++) {
-                    if (saveActions.at(j)->data().toString().endsWith("_" + QString::number(i))) {
+                    if (saveActions.at(j)->data().toString().endsWith('_' + QString::number(i))) {
                         saveActions[j]->setText(i18n("Save as %1", layoutName));
                         saveActions[j]->setData(key);
                         break;
@@ -1800,7 +1800,7 @@ void MainWindow::slotSaveLayout(QAction *action)
     layouts.deleteEntry(originallayoutName);
 
     QByteArray st = saveState();
-    layoutName.append("_" + QString::number(layoutId));
+    layoutName.append('_' + QString::number(layoutId));
     layouts.writeEntry(layoutName, st.toBase64());
     loadLayouts();
 }
@@ -1840,12 +1840,13 @@ void MainWindow::readOptions()
 
     if (!initialGroup.exists() || upgrade) {
         // this is our first run, show Wizard
-        Wizard *w = new Wizard(upgrade, this);
+        QPointer<Wizard> w = new Wizard(upgrade, this);
         if (w->exec() == QDialog::Accepted && w->isOk()) {
             w->adjustSettings();
             initialGroup.writeEntry("version", version);
             delete w;
         } else {
+            delete w;
             ::exit(1);
         }
     }
@@ -1857,7 +1858,7 @@ void MainWindow::readOptions()
 
 void MainWindow::slotRunWizard()
 {
-    Wizard *w = new Wizard(false, this);
+    QPointer<Wizard> w = new Wizard(false, this);
     if (w->exec() == QDialog::Accepted && w->isOk()) {
         w->adjustSettings();
     }
@@ -1879,12 +1880,16 @@ void MainWindow::newFile(bool showProjectSettings, bool force)
             if (!closeCurrentDocument())
                 return;
     } else {
-        ProjectSettings *w = new ProjectSettings(NULL, QMap <QString, QString> (), QStringList(), projectTracks.x(), projectTracks.y(), KdenliveSettings::defaultprojectfolder(), false, true, this);
-        if (w->exec() != QDialog::Accepted)
+        QPointer<ProjectSettings> w = new ProjectSettings(NULL, QMap <QString, QString> (), QStringList(), projectTracks.x(), projectTracks.y(), KdenliveSettings::defaultprojectfolder(), false, true, this);
+        if (w->exec() != QDialog::Accepted) {
+            delete w;
             return;
+        }
         if (!KdenliveSettings::activatetabs())
-            if (!closeCurrentDocument())
+            if (!closeCurrentDocument()) {
+                delete w;
                 return;
+            }
         if (KdenliveSettings::videothumbnails() != w->enableVideoThumbs())
             slotSwitchVideoThumbs();
         if (KdenliveSettings::audiothumbnails() != w->enableAudioThumbs())
@@ -2067,7 +2072,7 @@ void MainWindow::openFile(const KUrl &url)
     if (mime.data()->is("application/x-compressed-tar")) {
         // Opening a compressed project file, we need to process it
         kDebug()<<"Opening archive, processing";
-        ArchiveWidget *ar = new ArchiveWidget(url);
+        QPointer<ArchiveWidget> ar = new ArchiveWidget(url);
         if (ar->exec() == QDialog::Accepted) openFile(KUrl(ar->extractedProjectFile()));
         delete ar;
         return;
@@ -2225,8 +2230,9 @@ void MainWindow::parseProfiles(const QString &mltPath)
 
     if (KdenliveSettings::rendererpath().isEmpty()) {
         // Cannot find the MLT melt renderer, ask for location
-        KUrlRequesterDialog *getUrl = new KUrlRequesterDialog(QString(), i18n("Cannot find the melt program required for rendering (part of MLT)"), this);
+        QPointer<KUrlRequesterDialog> getUrl = new KUrlRequesterDialog(QString(), i18n("Cannot find the melt program required for rendering (part of MLT)"), this);
         if (getUrl->exec() == QDialog::Rejected) {
+            delete getUrl;
             ::exit(0);
         }
         KUrl rendererPath = getUrl->selectedUrl();
@@ -2248,9 +2254,10 @@ void MainWindow::parseProfiles(const QString &mltPath)
         }
         if (profilesList.isEmpty()) {
             // Cannot find the MLT profiles, ask for location
-            KUrlRequesterDialog *getUrl = new KUrlRequesterDialog(KdenliveSettings::mltpath(), i18n("Cannot find your MLT profiles, please give the path"), this);
+            QPointer<KUrlRequesterDialog> getUrl = new KUrlRequesterDialog(KdenliveSettings::mltpath(), i18n("Cannot find your MLT profiles, please give the path"), this);
             getUrl->fileDialog()->setMode(KFile::Directory);
             if (getUrl->exec() == QDialog::Rejected) {
+                delete getUrl;
                 ::exit(0);
             }
             KUrl mltPath = getUrl->selectedUrl();
@@ -2309,7 +2316,7 @@ void MainWindow::slotDetectAudioDriver()
 void MainWindow::slotEditProjectSettings()
 {
     QPoint p = m_activeDocument->getTracksCount();
-    ProjectSettings *w = new ProjectSettings(m_projectList, m_activeDocument->metadata(), m_activeTimeline->projectView()->extractTransitionsLumas(), p.x(), p.y(), m_activeDocument->projectFolder().path(), true, !m_activeDocument->isModified(), this);
+    QPointer<ProjectSettings> w = new ProjectSettings(m_projectList, m_activeDocument->metadata(), m_activeTimeline->projectView()->extractTransitionsLumas(), p.x(), p.y(), m_activeDocument->projectFolder().path(), true, !m_activeDocument->isModified(), this);
     connect(w, SIGNAL(disableProxies()), this, SLOT(slotDisableProxies()));
 
     if (w->exec() == QDialog::Accepted) {
@@ -2836,9 +2843,11 @@ void MainWindow::slotAddClipMarker()
     }
     QString id = clip->getId();
     CommentedTime marker(pos, i18n("Marker"));
-    MarkerDialog d(clip, marker, m_activeDocument->timecode(), i18n("Add Marker"), this);
-    if (d.exec() == QDialog::Accepted)
-        m_activeTimeline->projectView()->slotAddClipMarker(id, d.newMarker().time(), d.newMarker().comment());
+    QPointer<MarkerDialog> d = new MarkerDialog(clip, marker,
+                       m_activeDocument->timecode(), i18n("Add Marker"), this);
+    if (d->exec() == QDialog::Accepted)
+        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker().time(), d->newMarker().comment());
+    delete d;
 }
 
 void MainWindow::slotDeleteClipMarker()
@@ -2920,14 +2929,16 @@ void MainWindow::slotEditClipMarker()
     }
 
     CommentedTime marker(pos, oldcomment);
-    MarkerDialog d(clip, marker, m_activeDocument->timecode(), i18n("Edit Marker"), this);
-    if (d.exec() == QDialog::Accepted) {
-        m_activeTimeline->projectView()->slotAddClipMarker(id, d.newMarker().time(), d.newMarker().comment());
-        if (d.newMarker().time() != pos) {
+    QPointer<MarkerDialog> d = new MarkerDialog(clip, marker,
+                      m_activeDocument->timecode(), i18n("Edit Marker"), this);
+    if (d->exec() == QDialog::Accepted) {
+        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker().time(), d->newMarker().comment());
+        if (d->newMarker().time() != pos) {
             // remove old marker
             m_activeTimeline->projectView()->slotAddClipMarker(id, pos, QString());
         }
     }
+    delete d;
 }
 
 void MainWindow::slotAddMarkerGuideQuickly()
@@ -3271,7 +3282,7 @@ void MainWindow::slotShowClipProperties(DocClipBase *clip)
             return;
         }
         QString path = clip->getProperty("resource");
-        TitleWidget *dia_ui = new TitleWidget(KUrl(), m_activeDocument->timecode(), titlepath, m_projectMonitor->render, this);
+        QPointer<TitleWidget> dia_ui = new TitleWidget(KUrl(), m_activeDocument->timecode(), titlepath, m_projectMonitor->render, this);
         QDomDocument doc;
         doc.setContent(clip->getProperty("xmldata"));
         dia_ui->setXml(doc);
@@ -3329,11 +3340,12 @@ void MainWindow::slotApplyNewClipProperties(const QString id, QMap <QString, QSt
 
 void MainWindow::slotShowClipProperties(QList <DocClipBase *> cliplist, QMap<QString, QString> commonproperties)
 {
-    ClipProperties dia(cliplist, m_activeDocument->timecode(), commonproperties, this);
-    if (dia.exec() == QDialog::Accepted) {
+    QPointer<ClipProperties> dia = new ClipProperties(cliplist,
+                         m_activeDocument->timecode(), commonproperties, this);
+    if (dia->exec() == QDialog::Accepted) {
         QUndoCommand *command = new QUndoCommand();
         command->setText(i18n("Edit clips"));
-        QMap <QString, QString> newImageProps = dia.properties();
+        QMap <QString, QString> newImageProps = dia->properties();
         // Transparency setting applies only for images
         QMap <QString, QString> newProps = newImageProps;
         newProps.remove("transparency");
@@ -3347,8 +3359,9 @@ void MainWindow::slotShowClipProperties(QList <DocClipBase *> cliplist, QMap<QSt
         }
         m_activeDocument->commandStack()->push(command);
         for (int i = 0; i < cliplist.count(); i++)
-            m_activeTimeline->projectView()->slotUpdateClip(cliplist.at(i)->getId(), dia.needsTimelineReload());
+            m_activeTimeline->projectView()->slotUpdateClip(cliplist.at(i)->getId(), dia->needsTimelineReload());
     }
+    delete dia;
 }
 
 void MainWindow::customEvent(QEvent* e)
@@ -3675,7 +3688,7 @@ void MainWindow::slotSaveZone(Render *render, QPoint zone, DocClipBase *baseClip
         QString tmppath = m_activeDocument->projectFolder().path(KUrl::AddTrailingSlash);
         if (baseClip == NULL) tmppath.append("untitled.mlt");
         else {
-            tmppath.append((baseClip->name().isEmpty() ? baseClip->fileURL().fileName() : baseClip->name()) + "-" + QString::number(zone.x()).rightJustified(4, '0') + ".mlt");
+            tmppath.append((baseClip->name().isEmpty() ? baseClip->fileURL().fileName() : baseClip->name()) + '-' + QString::number(zone.x()).rightJustified(4, '0') + ".mlt");
         }
         path = KUrl(tmppath);
     }
@@ -3753,13 +3766,14 @@ int MainWindow::getNewStuff(const QString &configFile)
 {
     KNS3::Entry::List entries;
 #if KDE_IS_VERSION(4,3,80)
-    KNS3::DownloadDialog dialog(configFile);
-    dialog.exec();
-    entries = dialog.changedEntries();
+    QPointer<KNS3::DownloadDialog> dialog = new KNS3::DownloadDialog(configFile);
+    dialog->exec();
+    if (dialog) entries = dialog->changedEntries();
     foreach(const KNS3::Entry & entry, entries) {
         if (entry.status() == KNS3::Entry::Installed)
             kDebug() << "// Installed files: " << entry.installedFiles();
     }
+    delete dialog;
 #else
     KNS::Engine engine(0);
     if (engine.init(configFile))
@@ -3843,9 +3857,10 @@ void MainWindow::slotDvdWizard(const QString &url, const QString &profile)
     // We must stop the monitors since we create a new on in the dvd wizard
     m_clipMonitor->stop();
     m_projectMonitor->stop();
-    DvdWizard w(url, profile, this);
-    w.exec();
+    QPointer<DvdWizard> w = new DvdWizard(url, profile, this);
+    w->exec();
     m_projectMonitor->start();
+    delete w;
 }
 
 void MainWindow::slotShowTimeline(bool show)
@@ -3906,7 +3921,7 @@ void MainWindow::loadTranscoders()
     QMapIterator<QString, QString> i(profiles);
     while (i.hasNext()) {
         i.next();
-        QStringList data = i.value().split(";");
+        QStringList data = i.value().split(';');
         QAction *a;
         // separate audio transcoding in a separate menu
         if (data.count() > 2 && data.at(2) == "audio") {
@@ -4101,12 +4116,12 @@ void MainWindow::slotPrepareRendering(bool scriptExport, bool zoneOnly, const QS
             QDomElement e = producers.item(n).toElement();
             producerResource = EffectsList::property(e, "resource");
             if (producerResource.isEmpty()) continue;
-            if (!producerResource.startsWith("/")) {
-                producerResource.prepend(root + "/");
+            if (!producerResource.startsWith('/')) {
+                producerResource.prepend(root + '/');
             }
             if (producerResource.contains('?')) {
                 // slowmotion producer
-                suffix = "?" + producerResource.section('?', 1);
+                suffix = '?' + producerResource.section('?', 1);
                 producerResource = producerResource.section('?', 0, 0);
             }
             else suffix.clear();
@@ -4465,7 +4480,7 @@ void MainWindow::slotOpenBackupDialog(const KUrl url)
         projectId = m_activeDocument->getDocumentProperty("documentid");
     }
 
-    BackupWidget *dia = new BackupWidget(projectFile, projectFolder, projectId, this);
+    QPointer<BackupWidget> dia = new BackupWidget(projectFile, projectFolder, projectId, this);
     if (dia->exec() == QDialog::Accepted) {
         QString requestedBackup = dia->selectedFile();
         m_activeDocument->backupLastSavedVersion(projectFile.path());

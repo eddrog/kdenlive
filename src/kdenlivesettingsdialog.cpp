@@ -437,7 +437,7 @@ void KdenliveSettingsDialog::slotReadAudioDevices()
     QStringList lines = result.split('\n');
     foreach(const QString & data, lines) {
         //kDebug() << "// READING LINE: " << data;
-        if (!data.startsWith(" ") && data.count(':') > 1) {
+        if (!data.startsWith(' ') && data.count(':') > 1) {
             QString card = data.section(':', 0, 0).section(' ', -1);
             QString device = data.section(':', 1, 1).section(' ', -1);
             m_configSdl.kcfg_audio_device->addItem(data.section(':', -1).simplified(), "plughw:" + card + ',' + device);
@@ -480,34 +480,45 @@ void KdenliveSettingsDialog::showPage(int page, int option)
 void KdenliveSettingsDialog::slotEditVideoApplication()
 {
     KService::Ptr service;
-    KOpenWithDialog dlg(KUrl::List(), i18n("Select default video player"), m_configEnv.kcfg_defaultplayerapp->text(), this);
-    if (dlg.exec() != QDialog::Accepted)
+    QPointer<KOpenWithDialog> dlg = new KOpenWithDialog(KUrl::List(), i18n("Select default video player"), m_configEnv.kcfg_defaultplayerapp->text(), this);
+    if (dlg->exec() != QDialog::Accepted)
+    {
+        delete dlg;
         return;
+    }
 
-    service = dlg.service();
+    service = dlg->service();
     m_configEnv.kcfg_defaultplayerapp->setText(service->exec());
+    delete dlg;
 }
 
 void KdenliveSettingsDialog::slotEditAudioApplication()
 {
     KService::Ptr service;
-    KOpenWithDialog dlg(KUrl::List(), i18n("Select default audio editor"), m_configEnv.kcfg_defaultaudioapp->text(), this);
-    if (dlg.exec() != QDialog::Accepted)
+    QPointer<KOpenWithDialog> dlg = new KOpenWithDialog(KUrl::List(), i18n("Select default audio editor"), m_configEnv.kcfg_defaultaudioapp->text(), this);
+    if (dlg->exec() != QDialog::Accepted)
+    {
+        delete dlg;
         return;
+    }
 
-    service = dlg.service();
+    service = dlg->service();
     m_configEnv.kcfg_defaultaudioapp->setText(service->exec());
+    delete dlg;
 }
 
 void KdenliveSettingsDialog::slotEditImageApplication()
 {
     KService::Ptr service;
-    KOpenWithDialog dlg(KUrl::List(), i18n("Select default image editor"), m_configEnv.kcfg_defaultimageapp->text(), this);
-    if (dlg.exec() != QDialog::Accepted)
+    QPointer<KOpenWithDialog> dlg = new KOpenWithDialog(KUrl::List(), i18n("Select default image editor"), m_configEnv.kcfg_defaultimageapp->text(), this);
+    if (dlg->exec() != QDialog::Accepted)
+    {
+        delete dlg;
         return;
-
-    service = dlg.service();
+    }
+    service = dlg->service();
     m_configEnv.kcfg_defaultimageapp->setText(service->exec());
+    delete dlg;
 }
 
 #ifdef USE_JOGSHUTTLE
@@ -622,19 +633,19 @@ void KdenliveSettingsDialog::updateSettings()
 
     // Check encoding profiles
     QString data = m_configCapture.kcfg_v4l_profile->itemData(m_configCapture.kcfg_v4l_profile->currentIndex()).toString();
-    if (!data.isEmpty() && (data.section(";", 0, 0) != KdenliveSettings::v4l_parameters() || data.section(";", 1, 1) != KdenliveSettings::v4l_extension())) {
-        KdenliveSettings::setV4l_parameters(data.section(";", 0, 0));
-        KdenliveSettings::setV4l_extension(data.section(";", 1, 1));
+    if (!data.isEmpty() && (data.section(';', 0, 0) != KdenliveSettings::v4l_parameters() || data.section(';', 1, 1) != KdenliveSettings::v4l_extension())) {
+        KdenliveSettings::setV4l_parameters(data.section(';', 0, 0));
+        KdenliveSettings::setV4l_extension(data.section(';', 1, 1));
     }
     data = m_configCapture.kcfg_decklink_profile->itemData(m_configCapture.kcfg_decklink_profile->currentIndex()).toString();
-    if (!data.isEmpty() && (data.section(";", 0, 0) != KdenliveSettings::decklink_parameters() || data.section(";", 1, 1) != KdenliveSettings::decklink_extension())) {
-        KdenliveSettings::setDecklink_parameters(data.section(";", 0, 0));
-        KdenliveSettings::setDecklink_extension(data.section(";", 1, 1));
+    if (!data.isEmpty() && (data.section(';', 0, 0) != KdenliveSettings::decklink_parameters() || data.section(';', 1, 1) != KdenliveSettings::decklink_extension())) {
+        KdenliveSettings::setDecklink_parameters(data.section(';', 0, 0));
+        KdenliveSettings::setDecklink_extension(data.section(';', 1, 1));
     }
     data = m_configProject.kcfg_proxy_profile->itemData(m_configProject.kcfg_proxy_profile->currentIndex()).toString();
-    if (!data.isEmpty() && (data.section(";", 0, 0) != KdenliveSettings::proxyparams() || data.section(";", 1, 1) != KdenliveSettings::proxyextension())) {
-        KdenliveSettings::setProxyparams(data.section(";", 0, 0));
-        KdenliveSettings::setProxyextension(data.section(";", 1, 1));
+    if (!data.isEmpty() && (data.section(';', 0, 0) != KdenliveSettings::proxyparams() || data.section(';', 1, 1) != KdenliveSettings::proxyextension())) {
+        KdenliveSettings::setProxyparams(data.section(';', 0, 0));
+        KdenliveSettings::setProxyextension(data.section(';', 1, 1));
     }
 
 
@@ -789,7 +800,7 @@ void KdenliveSettingsDialog::slotAddTranscode()
     QListWidgetItem *item = new QListWidgetItem(m_configTranscode.profile_name->text());
     QString data = m_configTranscode.profile_parameters->toPlainText();
     data.append(" %1." + m_configTranscode.profile_extension->text());
-    data.append(";");
+    data.append(';');
     if (!m_configTranscode.profile_description->text().isEmpty()) 
         data.append(m_configTranscode.profile_description->text());
     if (m_configTranscode.profile_audioonly->isChecked()) data.append(";audio");
@@ -807,7 +818,7 @@ void KdenliveSettingsDialog::slotUpdateTranscodingProfile()
     item->setText(m_configTranscode.profile_name->text());
     QString data = m_configTranscode.profile_parameters->toPlainText();
     data.append(" %1." + m_configTranscode.profile_extension->text());
-    data.append(";");
+    data.append(';');
     if (!m_configTranscode.profile_description->text().isEmpty())
         data.append(m_configTranscode.profile_description->text());
     if (m_configTranscode.profile_audioonly->isChecked()) data.append(";audio");
@@ -897,19 +908,19 @@ void KdenliveSettingsDialog::slotUpdatev4lDevice()
         m_configCapture.kcfg_v4l_format->addItem(i18n("Current settings"));
     }
 
-    QStringList pixelformats = info.split(">", QString::SkipEmptyParts);
+    QStringList pixelformats = info.split('>', QString::SkipEmptyParts);
     QString itemSize;
     QString pixelFormat;
     QStringList itemRates;
     for (int i = 0; i < pixelformats.count(); i++) {
         QString format = pixelformats.at(i).section(':', 0, 0);
-        QStringList sizes = pixelformats.at(i).split(":", QString::SkipEmptyParts);
+        QStringList sizes = pixelformats.at(i).split(':', QString::SkipEmptyParts);
         pixelFormat = sizes.takeFirst();
         for (int j = 0; j < sizes.count(); j++) {
-            itemSize = sizes.at(j).section("=", 0, 0);
-            itemRates = sizes.at(j).section("=", 1, 1).split(",", QString::SkipEmptyParts);
+            itemSize = sizes.at(j).section('=', 0, 0);
+            itemRates = sizes.at(j).section('=', 1, 1).split(',', QString::SkipEmptyParts);
             for (int k = 0; k < itemRates.count(); k++) {
-                m_configCapture.kcfg_v4l_format->addItem("[" + format + "] " + itemSize + " (" + itemRates.at(k) + ")", QStringList() << format << itemSize.section('x', 0, 0) << itemSize.section('x', 1, 1) << itemRates.at(k).section('/', 0, 0) << itemRates.at(k).section('/', 1, 1));
+                m_configCapture.kcfg_v4l_format->addItem('[' + format + "] " + itemSize + " (" + itemRates.at(k) + ')', QStringList() << format << itemSize.section('x', 0, 0) << itemSize.section('x', 1, 1) << itemRates.at(k).section('/', 0, 0) << itemRates.at(k).section('/', 1, 1));
             }
         }
     }
@@ -988,7 +999,7 @@ void KdenliveSettingsDialog::slotManageEncodingProfile()
         if (m_configCapture.tabWidget->currentIndex() == 1) type = 1;
         else if (m_configCapture.tabWidget->currentIndex() == 3) type = 2;
     }
-    EncodingProfilesDialog *d = new EncodingProfilesDialog(type);
+    QPointer<EncodingProfilesDialog> d = new EncodingProfilesDialog(type);
     d->exec();
     delete d;
     loadEncodingProfiles();
@@ -1049,7 +1060,7 @@ void KdenliveSettingsDialog::slotUpdateDecklinkProfile(int ix)
     else ix = m_configCapture.kcfg_decklink_profile->currentIndex();
     QString data = m_configCapture.kcfg_decklink_profile->itemData(ix).toString();
     if (data.isEmpty()) return;
-    m_configCapture.decklink_parameters->setPlainText(data.section(";", 0, 0));
+    m_configCapture.decklink_parameters->setPlainText(data.section(';', 0, 0));
     //
 }
 
@@ -1059,7 +1070,7 @@ void KdenliveSettingsDialog::slotUpdateV4lProfile(int ix)
     else ix = m_configCapture.kcfg_v4l_profile->currentIndex();
     QString data = m_configCapture.kcfg_v4l_profile->itemData(ix).toString();
     if (data.isEmpty()) return;
-    m_configCapture.v4l_parameters->setPlainText(data.section(";", 0, 0));
+    m_configCapture.v4l_parameters->setPlainText(data.section(';', 0, 0));
     //
 }
 
@@ -1069,14 +1080,14 @@ void KdenliveSettingsDialog::slotUpdateProxyProfile(int ix)
     else ix = m_configProject.kcfg_proxy_profile->currentIndex();
     QString data = m_configProject.kcfg_proxy_profile->itemData(ix).toString();
     if (data.isEmpty()) return;
-    m_configProject.proxyparams->setPlainText(data.section(";", 0, 0));
+    m_configProject.proxyparams->setPlainText(data.section(';', 0, 0));
     //
 }
 
 void KdenliveSettingsDialog::slotEditVideo4LinuxProfile()
 {
     QString vl4ProfilePath = KStandardDirs::locateLocal("appdata", "profiles/video4linux");
-    ProfilesDialog *w = new ProfilesDialog(vl4ProfilePath);
+    QPointer<ProfilesDialog> w = new ProfilesDialog(vl4ProfilePath);
     if (w->exec() == QDialog::Accepted) {
         // save and update profile
         loadCurrentV4lProfileInfo();
