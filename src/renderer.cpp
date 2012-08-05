@@ -4518,17 +4518,14 @@ void Render::mltOnJackStopped(mlt_position *position)
 {
 	if(m_mltProducer)
 	{
-//		if(m_mltProducer->get_speed() != 0)
-//		{
-//			m_mltFilterJack->fire_event("jack-stop");
-//		}
-//		else
-		{
-			m_mltProducer->set_speed(0.0);
-			m_mltConsumer->purge();
-			m_mltProducer->seek(*position);
-			m_mltConsumer->set("refresh", 1);
-		}
+		m_mltProducer->pause();
+		m_mltProducer->seek(*position);
+	}
+
+	if(m_mltConsumer)
+	{
+		m_mltConsumer->purge();
+		m_mltConsumer->set("refresh", 1);
 	}
 }
 
@@ -4537,7 +4534,7 @@ void Render::mltOnJackStarted(mlt_position *position)
 	if(m_mltProducer)
 	{
 		m_mltProducer->set_speed(1.0);
-		m_mltConsumer->purge();
+//		m_mltConsumer->purge();
 		m_mltProducer->seek(*position);
 		m_mltConsumer->set("refresh", 1);
 	}
@@ -4664,7 +4661,10 @@ void Render::switchPlay(bool play)
 //                if (m_mltConsumer->is_stopped()) {
 //                    m_mltConsumer->start();
 //                }
-                m_mltConsumer->purge();
+                //m_mltConsumer->purge();
+        		m_mltProducer->set_speed(1.0);
+        		m_mltConsumer->start();
+        		m_mltConsumer->set("refresh", 1);
         		m_mltFilterJack->fire_event("jack-start");
         	} else {
                 if (m_mltConsumer->is_stopped()) {
@@ -4692,18 +4692,19 @@ void Render::switchPlay(bool play)
         	//mlt_events_fire( jack, "jack-seek", &pos, NULL );
         	//mlt_events_fire( jack, "jack-stop", NULL );
         	if (m_isJackActive) {
-            	m_mltProducer->set_speed(0.0);
+            	//m_mltProducer->set_speed(0.0);
 //                m_mltProducer->seek(m_mltConsumer->position());
                 //m_mltConsumer->set("refresh", 0);
-                m_mltConsumer->purge();
+                //m_mltConsumer->purge();
                 int pos = m_mltProducer->position();
 
                 //if (!m_mltConsumer->is_stopped()) m_mltConsumer->stop();
-                if (m_isZoneMode) resetZoneMode();
+                //if (m_isZoneMode) resetZoneMode();
+                m_mltProducer->pause();
                 // fire stop event
         		m_mltFilterJack->fire_event("jack-stop");
 
-        		mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
+        		//mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
         		//mlt_events_fire(jack_properties, "jack-seek", &pos, NULL);
         	} else {
                 m_mltProducer->set_speed(0.0);
