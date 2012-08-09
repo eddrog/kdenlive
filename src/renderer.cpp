@@ -4514,6 +4514,14 @@ void Render::_on_jack_started( mlt_properties owner, mlt_consumer consumer, mlt_
 	//std::cout << "_on_jack_stopped";
 }
 
+void Render::_on_jack_sync( mlt_properties owner, mlt_consumer consumer, mlt_position *position )
+{
+	Render *r = (Render*)consumer;// mlt_properties_get_data(owner, "render", NULL);
+
+	r->mltOnJackSync(position);
+	//std::cout << "_on_jack_sync";
+}
+
 void Render::mltOnJackStopped(mlt_position *position)
 {
 	if(m_mltProducer)
@@ -4543,6 +4551,16 @@ void Render::mltOnJackStarted(mlt_position *position)
 	}
 }
 
+void Render::mltOnJackSync(mlt_position *position)
+{
+	if(m_mltProducer)
+	{
+		m_mltProducer->seek(*position);
+		//m_mltConsumer->set("refresh", 1);
+	}
+}
+
+
 void Render::mltConnectJack()
 {
     /* TODO: review eddrog - connecting jack */
@@ -4571,6 +4589,7 @@ void Render::mltConnectJack()
 				// register the jack listeners
 				m_mltFilterJack->listen("jack-stopped", this, (mlt_listener) Render::_on_jack_stopped);
 				m_mltFilterJack->listen("jack-started", this, (mlt_listener) Render::_on_jack_started);
+				m_mltFilterJack->listen("jack-sync", this, (mlt_listener) Render::_on_jack_sync);
 			}
 
 			// start the consumer

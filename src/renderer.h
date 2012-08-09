@@ -373,8 +373,10 @@ private:
     Mlt::Filter *m_mltFilterJack;
     static void _on_jack_stopped( mlt_properties owner, mlt_consumer consumer, mlt_position *position );
     static void _on_jack_started( mlt_properties owner, mlt_consumer consumer, mlt_position *position );
+    static void _on_jack_sync( mlt_properties owner, mlt_consumer consumer, mlt_position *position );
     void mltOnJackStopped(mlt_position *position);
     void mltOnJackStarted(mlt_position *position);
+    void mltOnJackSync(mlt_position *position);
 #endif
 
     void closeMlt();
