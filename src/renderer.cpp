@@ -4522,6 +4522,14 @@ void Render::_on_jack_sync( mlt_properties owner, mlt_consumer consumer, mlt_pos
 	//std::cout << "_on_jack_sync";
 }
 
+void Render::_on_jack_sync_pos( mlt_properties owner, mlt_consumer consumer)
+{
+	Render *r = (Render*)consumer;// mlt_properties_get_data(owner, "render", NULL);
+
+	r->mltOnJackSyncPos();
+	//std::cout << "_on_jack_sync";
+}
+
 void Render::mltOnJackStopped(mlt_position *position)
 {
 	if(m_mltProducer)
@@ -4544,9 +4552,9 @@ void Render::mltOnJackStarted(mlt_position *position)
 {
 	if(m_mltProducer)
 	{
-		m_mltProducer->set_speed(1.0);
 		m_mltConsumer->purge();
-		m_mltProducer->seek(*position);
+//		m_mltProducer->seek(*position);
+		m_mltProducer->set_speed(1.0);
 		m_mltConsumer->set("refresh", 1);
 	}
 }
@@ -4556,10 +4564,22 @@ void Render::mltOnJackSync(mlt_position *position)
 	if(m_mltProducer)
 	{
 		m_mltProducer->seek(*position);
+		m_mltProducer->set_speed(0.0);
+		//mlt_properties_set_position((mlt_properties)m_mltFilterJack->get_properties(), "_sync_pos", *position );
 		//m_mltConsumer->set("refresh", 1);
 	}
 }
 
+void Render::mltOnJackSyncPos()
+{
+	if(m_mltProducer && m_mltFilterJack)
+	{
+		int32_t pos = m_mltProducer->position();
+		mlt_properties_set_position((mlt_properties)m_mltFilterJack->get_properties(), "_sync_pos", pos );
+		//m_mltFilterJack->set("_sync_pos", (int32_t)pos);
+		//m_mltConsumer->set("refresh", 1);
+	}
+}
 
 void Render::mltConnectJack()
 {
@@ -4590,6 +4610,7 @@ void Render::mltConnectJack()
 				m_mltFilterJack->listen("jack-stopped", this, (mlt_listener) Render::_on_jack_stopped);
 				m_mltFilterJack->listen("jack-started", this, (mlt_listener) Render::_on_jack_started);
 				m_mltFilterJack->listen("jack-sync", this, (mlt_listener) Render::_on_jack_sync);
+				m_mltFilterJack->listen("jack-sync-pos", this, (mlt_listener) Render::_on_jack_sync_pos);
 			}
 
 			// start the consumer
@@ -4683,7 +4704,7 @@ void Render::switchPlay(bool play)
 //                if (m_mltConsumer->is_stopped()) {
 //                    m_mltConsumer->start();
 //                }
-                m_mltConsumer->purge();
+//                m_mltConsumer->purge();
         		m_mltFilterJack->fire_event("jack-start");
         	} else {
                 if (m_mltConsumer->is_stopped()) {
@@ -4714,7 +4735,7 @@ void Render::switchPlay(bool play)
             	m_mltProducer->set_speed(0.0);
 //                m_mltProducer->seek(m_mltConsumer->position());
                 //m_mltConsumer->set("refresh", 0);
-                m_mltConsumer->purge();
+//                m_mltConsumer->purge();
                 int pos = m_mltProducer->position();
 
                 //if (!m_mltConsumer->is_stopped()) m_mltConsumer->stop();

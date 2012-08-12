@@ -4553,17 +4553,17 @@ void MainWindow::slotConnectJack()
 		}
 	}
 
-	if (m_clipMonitor != NULL)	{
-		Render * rc = m_clipMonitor->render;
-
-		if ( rc != NULL )
-		{
-			setenv("JACK_NAME_CLIP", "KdliveClipMon", 1);
-			rc->mltConnectJack();
-			unsetenv("JACK_NAME_CLIP");
-			kDebug() << "Clip monitor connected to jack" << "\n";
-		}
-	}
+//	if (m_clipMonitor != NULL)	{
+//		Render * rc = m_clipMonitor->render;
+//
+//		if ( rc != NULL )
+//		{
+//			setenv("JACK_NAME_CLIP", "KdliveClipMon", 1);
+//			rc->mltConnectJack();
+//			unsetenv("JACK_NAME_CLIP");
+//			kDebug() << "Clip monitor connected to jack" << "\n";
+//		}
+//	}
 
 }
 
@@ -4580,16 +4580,16 @@ void MainWindow::slotDisconnectJack()
 		}
 	}
 
-	if (m_clipMonitor != NULL) {
-
-		Render * rc = m_clipMonitor->render;
-		if ( rc != NULL)
-		{
-			rc->mltDisconnectJack();
-
-			kDebug() << "Clip monitor disconnected from Jack" << "\n";
-		}
-	}
+//	if (m_clipMonitor != NULL) {
+//
+//		Render * rc = m_clipMonitor->render;
+//		if ( rc != NULL)
+//		{
+//			rc->mltDisconnectJack();
+//
+//			kDebug() << "Clip monitor disconnected from Jack" << "\n";
+//		}
+//	}
 }
 //#endif
 
