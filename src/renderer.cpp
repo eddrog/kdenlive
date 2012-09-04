@@ -1912,12 +1912,12 @@ int Render::mltInsertClip(ItemInfo info, QDomElement element, Mlt::Producer *pro
 }
 
 
-void Render::mltCutClip(int track, GenTime position)
+bool Render::mltCutClip(int track, GenTime position)
 {
     Mlt::Service service(m_mltProducer->parent().get_service());
     if (service.type() != tractor_type) {
         kWarning() << "// TRACTOR PROBLEM";
-        return;
+        return false;
     }
 
     Mlt::Tractor tractor(service);
@@ -1940,7 +1940,7 @@ void Render::mltCutClip(int track, GenTime position)
     int clipIndex = trackPlaylist.get_clip_index_at(cutPos);
     if (trackPlaylist.is_blank(clipIndex)) {
         kDebug() << "// WARNING, TRYING TO CUT A BLANK";
-        return;
+        return false;
     }
     service.lock();
     int clipStart = trackPlaylist.clip_start(clipIndex);
@@ -1950,21 +1950,15 @@ void Render::mltCutClip(int track, GenTime position)
     // duplicate effects
     Mlt::Producer *original = trackPlaylist.get_clip_at(clipStart);
     Mlt::Producer *clip = trackPlaylist.get_clip_at(cutPos);
-
-    Mlt::Service clipService;
-    Mlt::Service dupService;
-    if (original)
-        clipService = Mlt::Service(original->get_service());
-    else
-        clipService = Mlt::Service();
-
-    if (clip)
-        dupService = Mlt::Service(clip->get_service());
-    else
-        dupService = Mlt::Service();
-
-    if (original == NULL || clip == NULL)
+    
+    if (original == NULL || clip == NULL) {
         kDebug() << "// ERROR GRABBING CLIP AFTER SPLIT";
+	return false;
+    }
+
+    Mlt::Service clipService(original->get_service());
+    Mlt::Service dupService(clip->get_service());
+
 
     delete original;
     delete clip;
@@ -1987,7 +1981,7 @@ void Render::mltCutClip(int track, GenTime position)
         ct++;
         filter = clipService.filter(ct);
     }
-
+    return true;
     /* // Display playlist info
     kDebug()<<"////////////  AFTER";
     for (int i = 0; i < trackPlaylist.count(); i++) {
@@ -4732,6 +4726,7 @@ void Render::switchPlay(bool play)
     }
 }
 #endif
+
 
 #include "renderer.moc"
 
