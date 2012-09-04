@@ -733,6 +733,10 @@ void ProjectList::slotMissingClip(const QString &id)
     if (item) {
         item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsDropEnabled);
         int height = m_listView->iconSize().height();
+        if (m_render == NULL) {
+            kDebug() << "*********  ERROR, NULL RENDR";
+            return;
+        }
         int width = (int)(height  * m_render->dar());
         QPixmap pixmap = qVariantValue<QPixmap>(item->data(0, Qt::DecorationRole));
         if (pixmap.isNull()) {
@@ -746,10 +750,6 @@ void ProjectList::slotMissingClip(const QString &id)
         item->setData(0, Qt::DecorationRole, pixmap);
         if (item->referencedClip()) {
             item->referencedClip()->setPlaceHolder(true);
-            if (m_render == NULL) {
-                kDebug() << "*********  ERROR, NULL RENDR";
-                return;
-            }
             Mlt::Producer *newProd = m_render->invalidProducer(id);
             if (item->referencedClip()->getProducer()) {
                 Mlt::Properties props(newProd->get_properties());
@@ -1278,6 +1278,7 @@ void ProjectList::slotAddClip(DocClipBase *clip, bool getProperties)
     //m_listView->setEnabled(false);
     const QString parent = clip->getProperty("groupid");
     ProjectItem *item = NULL;
+    kDebug()<<"// Adding clip 1";
     monitorItemEditing(false);
     if (!parent.isEmpty()) {
         FolderProjectItem *parentitem = getFolderItemById(parent);
@@ -1296,6 +1297,7 @@ void ProjectList::slotAddClip(DocClipBase *clip, bool getProperties)
     if (item == NULL) {
         item = new ProjectItem(m_listView, clip);
     }
+    kDebug()<<"// Adding clip 2";
     if (item->data(0, DurationRole).isNull()) item->setData(0, DurationRole, i18n("Loading"));
     connect(clip, SIGNAL(createProxy(const QString &)), this, SLOT(slotCreateProxy(const QString &)));
     connect(clip, SIGNAL(abortProxy(const QString &, const QString &)), this, SLOT(slotAbortProxy(const QString, const QString)));
@@ -1598,10 +1600,16 @@ void ProjectList::updateAllClips(bool displayRatioChanged, bool fpsChanged, QStr
 QString ProjectList::getExtensions()
 {
     // Build list of mime types
-    QStringList mimeTypes = QStringList() << "application/x-kdenlive" << "application/x-kdenlivetitle" << "video/mlt-playlist" << "text/plain"
-                            << "video/x-flv" << "application/vnd.rn-realmedia" << "video/x-dv" << "video/dv" << "video/x-msvideo" << "video/x-matroska" << "video/mpeg" << "video/ogg" << "video/x-ms-wmv" << "video/mp4" << "video/quicktime" << "video/webm"
-                            << "audio/x-flac" << "audio/x-matroska" << "audio/mp4" << "audio/mpeg" << "audio/x-mp3" << "audio/ogg" << "audio/x-wav" << "audio/x-aiff" << "audio/aiff" << "application/ogg" << "application/mxf" << "application/x-shockwave-flash"
-                            << "image/gif" << "image/jpeg" << "image/png" << "image/x-tga" << "image/x-bmp" << "image/svg+xml" << "image/tiff" << "image/x-xcf" << "image/x-xcf-gimp" << "image/x-vnd.adobe.photoshop" << "image/x-pcx" << "image/x-exr";
+    QStringList mimeTypes = QStringList() << "application/x-kdenlive" << "application/x-kdenlivetitle" << "video/mlt-playlist" << "text/plain";
+
+    // Video mimes
+    mimeTypes <<  "video/x-flv" << "application/vnd.rn-realmedia" << "video/x-dv" << "video/dv" << "video/x-msvideo" << "video/x-matroska" << "video/mpeg" << "video/ogg" << "video/x-ms-wmv" << "video/mp4" << "video/quicktime" << "video/webm" << "video/3gpp";
+
+    // Audio mimes
+    mimeTypes << "audio/x-flac" << "audio/x-matroska" << "audio/mp4" << "audio/mpeg" << "audio/x-mp3" << "audio/ogg" << "audio/x-wav" << "audio/x-aiff" << "audio/aiff" << "application/ogg" << "application/mxf" << "application/x-shockwave-flash" << "audio/ac3";
+
+    // Image mimes
+    mimeTypes << "image/gif" << "image/jpeg" << "image/png" << "image/x-tga" << "image/x-bmp" << "image/svg+xml" << "image/tiff" << "image/x-xcf" << "image/x-xcf-gimp" << "image/x-vnd.adobe.photoshop" << "image/x-pcx" << "image/x-exr";
 
     QString allExtensions;
     foreach(const QString & mimeType, mimeTypes) {
@@ -2110,6 +2118,7 @@ void ProjectList::slotRefreshClipThumbnail(QTreeWidgetItem *it, bool update)
 void ProjectList::slotReplyGetFileProperties(const QString &clipId, Mlt::Producer *producer, const stringMap &properties, const stringMap &metadata, bool replace)
 {
     QString toReload;
+    kDebug()<<"// CLIP LOADED 1;";
     ProjectItem *item = getItemById(clipId);
     int queue = m_render->processingItems();
     if (item && producer) {
@@ -2167,6 +2176,7 @@ void ProjectList::slotReplyGetFileProperties(const QString &clipId, Mlt::Produce
     if (queue == 0) {
         monitorItemEditing(true);
         if (item && m_thumbnailQueue.isEmpty()) {
+	    kDebug()<<"// CLIP LOADED;";
             if (!item->hasProxy() || m_render->activeClipId() == item->clipId())
                 m_listView->setCurrentItem(item);
             bool updatedProfile = false;

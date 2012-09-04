@@ -325,6 +325,7 @@ Q_OBJECT public:
     static bool getBlackMagicOutputDeviceList(KComboBox *devicelist);
     /** @brief Frame rendering is handeled by Kdenlive, don't show video through SDL display */
     void disablePreview(bool disable);
+    int requestedSeekPosition;
 
 private:
 

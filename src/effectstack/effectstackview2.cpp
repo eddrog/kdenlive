@@ -729,7 +729,7 @@ void EffectStackView2::slotCreateRegion(int ix, KUrl url)
         info.startPos = GenTime(-1);
         info.track = 0;
     }
-    else {
+    else if (m_clipref) {
         info = m_clipref->info();
     }
     CollapsibleEffect *current = getEffectByIndex(ix);
@@ -744,7 +744,7 @@ void EffectStackView2::slotCreateRegion(int ix, KUrl url)
     if (m_effectMetaInfo.trackMode) {
         isSelected = currentEffect->effectIndex() == 1;
     }
-    else {
+    else if (m_clipref) {
         isSelected = currentEffect->effectIndex() == m_clipref->selectedEffectIndex();
     }
     if (isSelected) currentEffect->setActive(true);
@@ -802,7 +802,8 @@ void EffectStackView2::slotCreateGroup(int ix)
     connectGroup(group);
     l->insertWidget(groupPos, group);
     group->installEventFilter( this );
-    group->addGroupEffect(effectToMove);
+    if (effectToMove)
+        group->addGroupEffect(effectToMove);
 }
 
 void EffectStackView2::connectGroup(CollapsibleGroup *group)
