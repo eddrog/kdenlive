@@ -1060,7 +1060,8 @@ void ClipItem::resetFrameWidth(int width)
 QList <GenTime> ClipItem::snapMarkers() const
 {
     QList < GenTime > snaps;
-    QList < GenTime > markers = baseClip()->snapMarkers();
+    if (!m_clip) return snaps;
+    QList < GenTime > markers = m_clip->snapMarkers();
     GenTime pos;
 
     for (int i = 0; i < markers.size(); i++) {
@@ -1076,7 +1077,8 @@ QList <GenTime> ClipItem::snapMarkers() const
 QList <CommentedTime> ClipItem::commentedSnapMarkers() const
 {
     QList < CommentedTime > snaps;
-    QList < CommentedTime > markers = baseClip()->commentedSnapMarkers();
+    if (!m_clip) return snaps;
+    QList < CommentedTime > markers = m_clip->commentedSnapMarkers();
     GenTime pos;
 
     for (int i = 0; i < markers.size(); i++) {
@@ -1301,7 +1303,9 @@ QVariant ClipItem::itemChange(GraphicsItemChange change, const QVariant &value)
         int xpos = projectScene()->getSnapPointForPos((int) newPos.x(), KdenliveSettings::snaptopoints());
         xpos = qMax(xpos, 0);
         newPos.setX(xpos);
-        int newTrack = newPos.y() / KdenliveSettings::trackheight();
+	// Warning: newPos gives a position relative to the click event, so hack to get absolute pos
+	int yOffset = property("y_absolute").toInt() + newPos.y();
+        int newTrack = yOffset / KdenliveSettings::trackheight();
         newTrack = qMin(newTrack, projectScene()->tracksCount() - 1);
         newTrack = qMax(newTrack, 0);
         newPos.setY((int)(newTrack  * KdenliveSettings::trackheight() + 1));
@@ -1650,8 +1654,8 @@ void ClipItem::setSpeed(const double speed, const int strobe)
     if (m_speed <= 0 && m_speed > -1)
         m_speed = -1.0;
     m_strobe = strobe;
-    if (m_speed == 1.0) m_clipName = baseClip()->name();
-    else m_clipName = baseClip()->name() + " - " + QString::number(speed * 100, 'f', 0) + '%';
+    if (m_speed == 1.0) m_clipName = m_clip->name();
+    else m_clipName = m_clip->name() + " - " + QString::number(speed * 100, 'f', 0) + '%';
     m_info.cropStart = GenTime((int)(m_speedIndependantInfo.cropStart.frames(m_fps) / qAbs(m_speed) + 0.5), m_fps);
     m_info.cropDuration = GenTime((int)(m_speedIndependantInfo.cropDuration.frames(m_fps) / qAbs(m_speed) + 0.5), m_fps);
     //update();

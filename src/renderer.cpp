@@ -53,8 +53,9 @@
 
 #include <QDebug>
 
-#include <QThread>
+#define SEEK_INACTIVE (-1)
 
+#include <QThread>
 // Can't believe I need to do this to sleep.
 class SleepThread : QThread
 {
@@ -116,6 +117,7 @@ static void consumer_gl_frame_show(mlt_consumer, Render * self, mlt_frame frame_
 
 Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWidget *parent) :
     AbstractRender(rendererName, parent),
+    requestedSeekPosition(SEEK_INACTIVE),
     m_name(rendererName),
     m_mltConsumer(NULL),
     m_mltProducer(NULL),
@@ -389,21 +391,14 @@ int Render::resetProfile(const QString &profileName, bool dropSceneList)
 
 void Render::seek(GenTime time)
 {
-    if (!m_mltProducer)
-        return;
-
-    m_mltProducer->seek((int)(time.frames(m_fps)));
-    if (m_mltProducer->get_speed() == 0) {
-        refresh();
-    }
+    int pos = time.frames(m_fps);
+    seek(pos);
 }
 
 void Render::seek(int time)
 {
     if (!m_mltProducer)
         return;
-
-    m_mltProducer->seek(time);
 
 #ifdef USE_JACK
     if(m_name == Kdenlive::projectMonitor && m_mltFilterJack && m_isJackActive)
@@ -414,9 +409,13 @@ void Render::seek(int time)
    }
 #endif
 
-    if (m_mltProducer->get_speed() == 0) {
-        refresh();
+    if (requestedSeekPosition == SEEK_INACTIVE) {
+		m_mltProducer->seek(time);
+		if (m_mltProducer->get_speed() == 0) {
+		    refresh();
+		}
     }
+    requestedSeekPosition = time;
 }
 
 //static
@@ -1055,6 +1054,7 @@ void Render::initSceneList()
 int Render::setProducer(Mlt::Producer *producer, int position)
 {
     m_refreshTimer.stop();
+    requestedSeekPosition = SEEK_INACTIVE;
     QMutexLocker locker(&m_mutex);
     QString currentId;
     int consumerPosition = 0;
@@ -1129,6 +1129,7 @@ int Render::setSceneList(QDomDocument list, int position)
 
 int Render::setSceneList(QString playlist, int position)
 {
+    requestedSeekPosition = SEEK_INACTIVE;
     m_refreshTimer.stop();
     QMutexLocker locker(&m_mutex);
     if (m_winid == -1) return -1;
@@ -1435,6 +1436,7 @@ void Render::start()
 
 void Render::stop()
 {
+    requestedSeekPosition = SEEK_INACTIVE;
     m_refreshTimer.stop();
     QMutexLocker locker(&m_mutex);
     if (m_mltProducer == NULL) return;
@@ -1451,6 +1453,7 @@ void Render::stop()
 
 void Render::stop(const GenTime & startTime)
 {
+    requestedSeekPosition = SEEK_INACTIVE;
     m_refreshTimer.stop();
     QMutexLocker locker(&m_mutex);
     if (m_mltProducer) {
@@ -1463,6 +1466,7 @@ void Render::stop(const GenTime & startTime)
 
 void Render::pause()
 {
+    requestedSeekPosition = SEEK_INACTIVE;
     if (!m_mltProducer || !m_mltConsumer)
         return;
     if (m_mltProducer->get_speed() == 0.0) return;
@@ -1476,6 +1480,7 @@ void Render::pause()
 void Render::switchPlay(bool play)
 {
     QMutexLocker locker(&m_mutex);
+    requestedSeekPosition = SEEK_INACTIVE;
     if (!m_mltProducer || !m_mltConsumer)
         return;
     if (m_isZoneMode) resetZoneMode();
@@ -1507,6 +1512,7 @@ void Render::switchPlay(bool play)
 
 void Render::play(double speed)
 {
+    requestedSeekPosition = SEEK_INACTIVE;
     if (!m_mltProducer)
         return;
     // if (speed == 0.0) m_mltProducer->set("out", m_mltProducer->get_length() - 1);
@@ -1520,6 +1526,7 @@ void Render::play(double speed)
 
 void Render::play(const GenTime & startTime)
 {
+    requestedSeekPosition = SEEK_INACTIVE;
     if (!m_mltProducer || !m_mltConsumer)
         return;
     m_mltProducer->seek((int)(startTime.frames(m_fps)));
@@ -1529,6 +1536,7 @@ void Render::play(const GenTime & startTime)
 
 void Render::loopZone(const GenTime & startTime, const GenTime & stopTime)
 {
+    requestedSeekPosition = SEEK_INACTIVE;
     if (!m_mltProducer || !m_mltConsumer)
         return;
     //m_mltProducer->set("eof", "loop");
@@ -1539,6 +1547,7 @@ void Render::loopZone(const GenTime & startTime, const GenTime & stopTime)
 
 void Render::playZone(const GenTime & startTime, const GenTime & stopTime)
 {
+    requestedSeekPosition = SEEK_INACTIVE;
     if (!m_mltProducer || !m_mltConsumer)
         return;
     if (!m_isZoneMode) m_originalOut = m_mltProducer->get_playtime() - 1;
@@ -1552,7 +1561,7 @@ void Render::playZone(const GenTime & startTime, const GenTime & stopTime)
 
 void Render::resetZoneMode()
 {
-    if (!m_isZoneMode && !m_isLoopMode) return;
+    if (!m_mltProducer || (!m_isZoneMode && !m_isLoopMode)) return;
     m_mltProducer->set("out", m_originalOut);
     //m_mltProducer->set("eof", "pause");
     m_isZoneMode = false;
@@ -1561,44 +1570,17 @@ void Render::resetZoneMode()
 
 void Render::seekToFrame(int pos)
 {
-    if (!m_mltProducer)
-        return;
     resetZoneMode();
-    m_mltProducer->seek(pos);
-
-#ifdef USE_JACK
-    if(m_name == Kdenlive::projectMonitor && m_mltFilterJack && m_isJackActive)
-    {
-    	if (pos < 0) pos = 0;
-        mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
-		mlt_events_fire(jack_properties, "jack-seek", &pos, NULL);
-   }
-#endif
-
-    if (m_mltProducer->get_speed() == 0) {
-        refresh();
-    }
+    seek(pos);
 }
 
 void Render::seekToFrameDiff(int diff)
 {
-    if (!m_mltProducer)
-        return;
     resetZoneMode();
-
-    int pos = m_mltProducer->position() + diff;
-    m_mltProducer->seek(pos);
-
-#ifdef USE_JACK
-    if(m_name == Kdenlive::projectMonitor && m_mltFilterJack && m_isJackActive)
-    {
-    	if(pos < 0) pos = 0;
-        mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
-		mlt_events_fire(jack_properties, "jack-seek", &pos, NULL);
-   }
-#endif
-
-    refresh();
+    if (requestedSeekPosition == SEEK_INACTIVE)
+		seek(m_mltProducer->position() + diff);
+    else 
+    	seek(requestedSeekPosition + diff);
 }
 
 void Render::doRefresh()
@@ -1676,7 +1658,15 @@ void Render::emitFrameUpdated(Mlt::Frame& frame)
 
 void Render::emitFrameNumber()
 {
-    if (m_mltConsumer) emit rendererPosition((int) m_mltConsumer->position());
+    int currentPos = m_mltConsumer->position();
+    if (currentPos == requestedSeekPosition) requestedSeekPosition = SEEK_INACTIVE;
+    emit rendererPosition(currentPos);
+    if (requestedSeekPosition != SEEK_INACTIVE) {
+	m_mltProducer->seek(requestedSeekPosition);
+	if (m_mltProducer->get_speed() == 0) {
+	    refresh();
+	}
+    }
 }
 
 void Render::emitConsumerStopped()
@@ -1922,12 +1912,12 @@ int Render::mltInsertClip(ItemInfo info, QDomElement element, Mlt::Producer *pro
 }
 
 
-void Render::mltCutClip(int track, GenTime position)
+bool Render::mltCutClip(int track, GenTime position)
 {
     Mlt::Service service(m_mltProducer->parent().get_service());
     if (service.type() != tractor_type) {
         kWarning() << "// TRACTOR PROBLEM";
-        return;
+        return false;
     }
 
     Mlt::Tractor tractor(service);
@@ -1950,7 +1940,7 @@ void Render::mltCutClip(int track, GenTime position)
     int clipIndex = trackPlaylist.get_clip_index_at(cutPos);
     if (trackPlaylist.is_blank(clipIndex)) {
         kDebug() << "// WARNING, TRYING TO CUT A BLANK";
-        return;
+        return false;
     }
     service.lock();
     int clipStart = trackPlaylist.clip_start(clipIndex);
@@ -1960,12 +1950,16 @@ void Render::mltCutClip(int track, GenTime position)
     // duplicate effects
     Mlt::Producer *original = trackPlaylist.get_clip_at(clipStart);
     Mlt::Producer *clip = trackPlaylist.get_clip_at(cutPos);
-
+    
     if (original == NULL || clip == NULL) {
         kDebug() << "// ERROR GRABBING CLIP AFTER SPLIT";
+	return false;
     }
+
     Mlt::Service clipService(original->get_service());
     Mlt::Service dupService(clip->get_service());
+
+
     delete original;
     delete clip;
     int ct = 0;
@@ -1987,7 +1981,7 @@ void Render::mltCutClip(int track, GenTime position)
         ct++;
         filter = clipService.filter(ct);
     }
-
+    return true;
     /* // Display playlist info
     kDebug()<<"////////////  AFTER";
     for (int i = 0; i < trackPlaylist.count(); i++) {
@@ -4541,9 +4535,8 @@ void Render::mltOnJackStopped(mlt_position *position)
 //		else
 		{
 			m_mltProducer->set_speed(0.0);
-			m_mltConsumer->purge();
+			refresh();
 			m_mltProducer->seek(*position);
-			m_mltConsumer->set("refresh", 1);
 		}
 	}
 }
@@ -4552,10 +4545,9 @@ void Render::mltOnJackStarted(mlt_position *position)
 {
 	if(m_mltProducer)
 	{
-		m_mltConsumer->purge();
-//		m_mltProducer->seek(*position);
+		m_mltProducer->seek(*position);
+		refresh();
 		m_mltProducer->set_speed(1.0);
-		m_mltConsumer->set("refresh", 1);
 	}
 }
 
@@ -4629,31 +4621,6 @@ void Render::mltConnectJack()
 			m_mltFilterJack = NULL;
 		}
 	}
-
-#if 0
-    	mlt_properties properties = MLT_CONSUMER_PROPERTIES( m_mltConsumer->get_consumer() );
-    	//m_mltFilterJack = Mlt::Factory::filter(*m_mltProfile,"jackrack", NULL);
-
-    	mlt_filter jack = mlt_factory_filter( m_mltProfile->get_profile(), "jackrack", NULL );
-		mlt_properties jack_properties = MLT_FILTER_PROPERTIES(jack);
-
-		mlt_service_attach( MLT_CONSUMER_SERVICE(m_mltConsumer->get_consumer()), jack );
-		mlt_properties_set_int( properties, "audio_off", 1 );
-		mlt_properties_set_data( properties, "jack_filter", jack, 0, (mlt_destructor) mlt_filter_close, NULL );
-		mlt_properties_set( jack_properties, "out_1", "system:playback_1" );
-		mlt_properties_set( jack_properties, "out_2", "system:playback_2" );
-		mlt_properties_set_data( jack_properties, "render", this, 0, NULL, NULL );
-#endif
-
-#if 0
-		mlt_properties_set_data( MLT_CONSUMER_PROPERTIES( m_mltConsumer->get_consumer() ), "transport_producer", m_mltProducer->get_producer() , 0, NULL, NULL );
-		//mlt_properties_set_data( MLT_PRODUCER_PROPERTIES( m_mltProducer->get_producer() ), "transport_consumer", m_mltConsumer->get_consumer(), 0, NULL, NULL );
-
-
-		mlt_events_listen( jack_properties, m_mltConsumer->get_consumer(), "jack-started", (mlt_listener) on_jack_started );
-		mlt_events_listen( jack_properties, m_mltConsumer->get_consumer(), "jack-stopped", (mlt_listener) Render::_on_jack_stopped );
-#endif
-
 }
 
 void Render::mltDisconnectJack()
@@ -4780,6 +4747,7 @@ void Render::switchPlay(bool play)
     }
 }
 #endif
+
 
 #include "renderer.moc"
 
