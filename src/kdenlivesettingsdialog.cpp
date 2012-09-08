@@ -84,6 +84,8 @@ KdenliveSettingsDialog::KdenliveSettingsDialog(const QMap<QString, QString>& map
     m_configEnv.mltpathurl->setMode(KFile::Directory);
     m_configEnv.mltpathurl->lineEdit()->setObjectName("kcfg_mltpath");
     m_configEnv.rendererpathurl->lineEdit()->setObjectName("kcfg_rendererpath");
+    m_configEnv.ffmpegurl->lineEdit()->setObjectName("kcfg_ffmpegpath");
+    m_configEnv.ffplayurl->lineEdit()->setObjectName("kcfg_ffplaypath");
     m_configEnv.kcfg_mltthreads->setMaximum( QThread::idealThreadCount() < 4 ? QThread::idealThreadCount() : 3 );
     m_configEnv.tmppathurl->setMode(KFile::Directory);
     m_configEnv.tmppathurl->lineEdit()->setObjectName("kcfg_currenttmpfolder");
@@ -521,10 +523,10 @@ void KdenliveSettingsDialog::slotEditImageApplication()
     delete dlg;
 }
 
-#ifdef USE_JOGSHUTTLE
 void KdenliveSettingsDialog::slotCheckShuttle(int state)
 {
-    m_configShuttle.config_group->setEnabled(state);
+#ifdef USE_JOGSHUTTLE
+  m_configShuttle.config_group->setEnabled(state);
     if (m_configShuttle.shuttledevicelist->count() == 0) {
         // parse devices
         QString baseName = "/dev/input/event";
@@ -542,16 +544,17 @@ void KdenliveSettingsDialog::slotCheckShuttle(int state)
         }
         if (KdenliveSettings::shuttledevice().isEmpty()) QTimer::singleShot(1500, this, SLOT(slotUpdateShuttleDevice()));
     }
+#endif /* USE_JOGSHUTTLE */
 }
 
 void KdenliveSettingsDialog::slotUpdateShuttleDevice(int ix)
 {
+#ifdef USE_JOGSHUTTLE
     QString device = m_configShuttle.shuttledevicelist->itemData(ix).toString();
     //KdenliveSettings::setShuttledevice(device);
     m_configShuttle.kcfg_shuttledevice->setText(device);
-}
-
 #endif /* USE_JOGSHUTTLE */
+}
 
 void KdenliveSettingsDialog::updateWidgets()
 {

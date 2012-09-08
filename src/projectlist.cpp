@@ -58,6 +58,8 @@
 #include <KColorScheme>
 #include <KActionCollection>
 #include <KUrlRequester>
+#include <KVBox>
+#include <KHBox>
 
 #ifdef USE_NEPOMUK
 #include <nepomuk/global.h>
@@ -77,6 +79,17 @@
 #include <QInputDialog>
 #include <QtConcurrentRun>
 #include <QVBoxLayout>
+#include <KPassivePopup>
+
+
+MyMessageWidget::MyMessageWidget(QWidget *parent) : KMessageWidget(parent) {}
+MyMessageWidget::MyMessageWidget(const QString &text, QWidget *parent) : KMessageWidget(text, parent) {}
+
+
+bool MyMessageWidget::event(QEvent* ev) {
+    if (ev->type() == QEvent::Hide || ev->type() == QEvent::Close) emit messageClosing();
+    return KMessageWidget::event(ev);
+}
 
 SmallInfoLabel::SmallInfoLabel(QWidget *parent) : QPushButton(parent)
 {
@@ -278,10 +291,11 @@ ProjectList::ProjectList(QWidget *parent) :
     m_listView = new ProjectListView(this);
     layout->addWidget(m_listView);
     
-#if KDE_IS_VERSION(4,7,0)    
-    m_infoMessage = new KMessageWidget;
+#if KDE_IS_VERSION(4,7,0)
+    m_infoMessage = new MyMessageWidget;
     layout->addWidget(m_infoMessage);
     m_infoMessage->setCloseButtonVisible(true);
+    connect(m_infoMessage, SIGNAL(messageClosing()), this, SLOT(slotResetInfoMessage()));
     //m_infoMessage->setWordWrap(true);
     m_infoMessage->hide();
     m_logAction = new QAction(i18n("Show Log"), this);
@@ -932,7 +946,7 @@ void ProjectList::slotUpdateClipProperties(const QString &id, QMap <QString, QSt
     ProjectItem *item = getItemById(id);
     if (item) {
         slotUpdateClipProperties(item, properties);
-        if (properties.contains("out") || properties.contains("force_fps") || properties.contains("resource")) {
+        if (properties.contains("out") || properties.contains("force_fps") || properties.contains("resource") || properties.contains("video_index") || properties.contains("audio_index")) {
             slotReloadClip(id);
         } else if (properties.contains("colour") ||
                    properties.contains("xmldata") ||
@@ -1277,14 +1291,13 @@ void ProjectList::slotAddClip(DocClipBase *clip, bool getProperties)
 {
     //m_listView->setEnabled(false);
     const QString parent = clip->getProperty("groupid");
+    QString groupName = clip->getProperty("groupname");
     ProjectItem *item = NULL;
-    kDebug()<<"// Adding clip 1";
     monitorItemEditing(false);
     if (!parent.isEmpty()) {
         FolderProjectItem *parentitem = getFolderItemById(parent);
         if (!parentitem) {
             QStringList text;
-            QString groupName = clip->getProperty("groupname");
             //kDebug() << "Adding clip to new group: " << groupName;
             if (groupName.isEmpty()) groupName = i18n("Folder");
             text << groupName;
@@ -1297,7 +1310,6 @@ void ProjectList::slotAddClip(DocClipBase *clip, bool getProperties)
     if (item == NULL) {
         item = new ProjectItem(m_listView, clip);
     }
-    kDebug()<<"// Adding clip 2";
     if (item->data(0, DurationRole).isNull()) item->setData(0, DurationRole, i18n("Loading"));
     connect(clip, SIGNAL(createProxy(const QString &)), this, SLOT(slotCreateProxy(const QString &)));
     connect(clip, SIGNAL(abortProxy(const QString &, const QString &)), this, SLOT(slotAbortProxy(const QString, const QString)));
@@ -1309,6 +1321,10 @@ void ProjectList::slotAddClip(DocClipBase *clip, bool getProperties)
         //item->setFlags(Qt::ItemIsSelectable);
         m_listView->processLayout();
         QDomElement e = clip->toXML().cloneNode().toElement();
+	if (!groupName.isEmpty()) {
+	    e.setAttribute("groupId", parent);
+	    e.setAttribute("group", groupName);
+	}
         e.removeAttribute("file_hash");
         resetThumbsProducer(clip);
         m_render->getFileProperties(e, clip->getId(), m_listView->iconSize().height(), true);
@@ -1721,9 +1737,15 @@ void ProjectList::slotAddClip(const QList <QUrl> givenList, const QString &group
 
     if (givenList.isEmpty() && !list.isEmpty()) {
         QStringList groupInfo = getGroup();
-        m_doc->slotAddClipList(list, groupInfo.at(0), groupInfo.at(1));
+	QMap <QString, QString> data;
+	data.insert("group", groupInfo.at(0));
+	data.insert("groupId", groupInfo.at(1));
+        m_doc->slotAddClipList(list, data);
     } else if (!list.isEmpty()) {
-        m_doc->slotAddClipList(list, groupName, groupId);
+	QMap <QString, QString> data;
+	data.insert("group", groupName);
+	data.insert("groupId", groupId);
+        m_doc->slotAddClipList(list, data);
     }
     
     if (!foldersList.isEmpty()) {
@@ -1740,8 +1762,12 @@ void ProjectList::slotAddClip(const QList <QUrl> givenList, const QString &group
                     folder = getFolderItemByName(folderName);
                 }
             }
-            if (folder)
-                m_doc->slotAddClipList(urls, folder->groupName(), folder->clipId());
+            if (folder) {
+		QMap <QString, QString> data;
+		data.insert("group", folder->groupName());
+		data.insert("groupId", folder->clipId());
+                m_doc->slotAddClipList(urls, data);
+	    }
             else m_doc->slotAddClipList(urls);
         }
     }
@@ -2118,7 +2144,6 @@ void ProjectList::slotRefreshClipThumbnail(QTreeWidgetItem *it, bool update)
 void ProjectList::slotReplyGetFileProperties(const QString &clipId, Mlt::Producer *producer, const stringMap &properties, const stringMap &metadata, bool replace)
 {
     QString toReload;
-    kDebug()<<"// CLIP LOADED 1;";
     ProjectItem *item = getItemById(clipId);
     int queue = m_render->processingItems();
     if (item && producer) {
@@ -2176,7 +2201,6 @@ void ProjectList::slotReplyGetFileProperties(const QString &clipId, Mlt::Produce
     if (queue == 0) {
         monitorItemEditing(true);
         if (item && m_thumbnailQueue.isEmpty()) {
-	    kDebug()<<"// CLIP LOADED;";
             if (!item->hasProxy() || m_render->activeClipId() == item->clipId())
                 m_listView->setCurrentItem(item);
             bool updatedProfile = false;
@@ -2953,7 +2977,7 @@ void ProjectList::slotProcessJobs()
 
         if (job->jobType == MLTJOB) {
             MeltJob *jb = static_cast<MeltJob *> (job);
-            jb->setProducer(currentClip->getProducer());
+            jb->setProducer(currentClip->getProducer(), currentClip->fileURL());
         }
         job->startJob();
         if (job->jobStatus == JOBDONE) {
@@ -3297,14 +3321,11 @@ void ProjectList::slotUpdateJobStatus(ProjectItem *item, int type, int status, c
     item->setJobStatus((JOBTYPE) type, (CLIPJOBSTATUS) status);
     if (status != JOBCRASHED) return;
 #if KDE_IS_VERSION(4,7,0)
-    m_infoMessage->animatedHide();
-    m_errorLog.clear();
-    m_infoMessage->setText(label);
-    m_infoMessage->setWordWrap(label.length() > 35);
-    m_infoMessage->setMessageType(KMessageWidget::Warning);
     QList<QAction *> actions = m_infoMessage->actions();
-    for (int i = 0; i < actions.count(); i++) {
-        m_infoMessage->removeAction(actions.at(i));
+    if (m_infoMessage->isHidden()) {
+	m_infoMessage->setText(label);
+	m_infoMessage->setWordWrap(m_infoMessage->text().length() > 35);
+	m_infoMessage->setMessageType(KMessageWidget::Warning);
     }
     
     if (!actionName.isEmpty()) {
@@ -3315,27 +3336,47 @@ void ProjectList::slotUpdateJobStatus(ProjectItem *item, int type, int status, c
             action = coll->action(actionName);
             if (action) break;
         }
-        if (action) m_infoMessage->addAction(action);
+        if (action && !actions.contains(action)) m_infoMessage->addAction(action);
     }
     if (!details.isEmpty()) {
-        m_errorLog = details;
-        m_infoMessage->addAction(m_logAction);
+        m_errorLog.append(details);
+        if (!actions.contains(m_logAction)) m_infoMessage->addAction(m_logAction);
     }
     m_infoMessage->animatedShow();
+#else
+    // warning for KDE < 4.7
+    KPassivePopup *passivePop = new KPassivePopup( this );
+    passivePop->setAutoDelete(true);
+    connect(passivePop, SIGNAL(clicked()), this, SLOT(slotClosePopup()));
+    m_errorLog.append(details);
+    KVBox *vb = new KVBox( passivePop );
+    KHBox *vh1 = new KHBox( vb );
+    KIcon icon("dialog-warning");
+    QLabel *iconLabel = new QLabel(vh1);
+    iconLabel->setPixmap(icon.pixmap(m_listView->iconSize()));
+    (void) new QLabel( label, vh1);
+    KHBox *box = new KHBox( vb );
+    QPushButton *but = new QPushButton( "Show log", box );
+    connect(but, SIGNAL(clicked(bool)), this, SLOT(slotShowJobLog()));
+
+    passivePop->setView( vb );
+    passivePop->show();
+    
 #endif
 }
 
 void ProjectList::slotShowJobLog()
 {
-#if KDE_IS_VERSION(4,7,0)
     KDialog d(this);
     d.setButtons(KDialog::Close);
     QTextEdit t(&d);
-    t.setPlainText(m_errorLog);
+    for (int i = 0; i < m_errorLog.count(); i++) {
+	if (i > 0) t.insertHtml("<br><hr /><br>");
+	t.insertPlainText(m_errorLog.at(i));
+    }
     t.setReadOnly(true);
     d.setMainWidget(&t);
     d.exec();
-#endif
 }
 
 QStringList ProjectList::getPendingJobs(const QString &id)
@@ -3474,6 +3515,22 @@ void ProjectList::updatePalette()
 {
     m_infoLabel->setStyleSheet(SmallInfoLabel::getStyleSheet(QApplication::palette()));
     m_listView->updateStyleSheet();
+}
+
+void ProjectList::slotResetInfoMessage()
+{
+#if KDE_IS_VERSION(4,7,0)
+    m_errorLog.clear();
+    QList<QAction *> actions = m_infoMessage->actions();
+    for (int i = 0; i < actions.count(); i++) {
+	m_infoMessage->removeAction(actions.at(i));
+    }
+#endif
+}
+
+void ProjectList::slotClosePopup()
+{
+    m_errorLog.clear();
 }
 
 #include "projectlist.moc"

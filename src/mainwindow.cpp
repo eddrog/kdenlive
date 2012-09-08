@@ -1839,7 +1839,7 @@ void MainWindow::readOptions()
         }
 
     }
-
+    if (KdenliveSettings::ffmpegpath().isEmpty() || KdenliveSettings::ffplaypath().isEmpty()) upgrade = true;
     if (!initialGroup.exists() || upgrade) {
         // this is our first run, show Wizard
         QPointer<Wizard> w = new Wizard(upgrade, this);
@@ -3112,16 +3112,17 @@ void MainWindow::slotEditItemDuration()
         m_activeTimeline->projectView()->editItemDuration();
 }
 
-void MainWindow::slotAddProjectClip(KUrl url, const QString &comment)
+void MainWindow::slotAddProjectClip(KUrl url, QMap <QString, QString> data)
 {
-    if (m_activeDocument)
-        m_activeDocument->slotAddClipFile(url, QString(), QString(), comment);
+    if (m_activeDocument) {
+        m_activeDocument->slotAddClipFile(url, data);
+    }
 }
 
 void MainWindow::slotAddProjectClipList(KUrl::List urls)
 {
     if (m_activeDocument)
-        m_activeDocument->slotAddClipList(urls, QString());
+        m_activeDocument->slotAddClipList(urls);
 }
 
 void MainWindow::slotAddTransition(QAction *result)
@@ -4506,7 +4507,7 @@ void MainWindow::slotDownloadResources()
     if (m_activeDocument) currentFolder = m_activeDocument->projectFolder().path();
     else currentFolder = KdenliveSettings::defaultprojectfolder();
     ResourceWidget *d = new ResourceWidget(currentFolder);
-    connect(d, SIGNAL(addClip(KUrl, const QString &)), this, SLOT(slotAddProjectClip(KUrl, const QString &)));
+    connect(d, SIGNAL(addClip(KUrl, QMap <QString, QString>)), this, SLOT(slotAddProjectClip(KUrl, QMap <QString, QString>)));
     d->show();
 }
 
