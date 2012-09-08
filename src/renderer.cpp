@@ -4630,7 +4630,7 @@ void Render::mltOnJackStarted(mlt_position *position)
 {
 	if(m_mltProducer)
 	{
-//		m_mltProducer->seek(*position);
+		m_mltProducer->seek(*position);
 		refresh();
 		m_mltProducer->set_speed(1.0);
 	}
@@ -4640,8 +4640,12 @@ void Render::mltOnJackSync(mlt_position *position)
 {
 	if(m_mltProducer)
 	{
+//		m_mltProducer->set_speed(0.0);
+//		m_mltProducer->seek(*position);
 		m_mltProducer->set_speed(0.0);
+//		refresh();
 		m_mltProducer->seek(*position);
+//		m_mltProducer->seek(*position);
 		//mlt_properties_set_position((mlt_properties)m_mltFilterJack->get_properties(), "_sync_pos", *position );
 		//m_mltConsumer->set("refresh", 1);
 	}
