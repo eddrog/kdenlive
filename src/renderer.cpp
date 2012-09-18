@@ -4630,7 +4630,7 @@ void Render::mltOnJackStarted(mlt_position *position)
 {
 	if(m_mltProducer)
 	{
-		m_mltProducer->seek(*position);
+//		m_mltProducer->seek(*position);
 		refresh();
 		m_mltProducer->set_speed(1.0);
 	}
@@ -4647,7 +4647,8 @@ void Render::mltOnJackSync(mlt_position *position)
 		m_mltProducer->seek(*position);
 //		m_mltProducer->seek(*position);
 		//mlt_properties_set_position((mlt_properties)m_mltFilterJack->get_properties(), "_sync_pos", *position );
-		//m_mltConsumer->set("refresh", 1);
+		m_mltConsumer->purge();
+		m_mltConsumer->set("refresh", 1);
 	}
 }
 
@@ -4655,10 +4656,11 @@ void Render::mltOnJackSyncPos()
 {
 	if(m_mltProducer && m_mltFilterJack)
 	{
-		int32_t pos = m_mltProducer->position();
+		int32_t pos = m_mltConsumer->position();
 		mlt_properties_set_position((mlt_properties)m_mltFilterJack->get_properties(), "_sync_pos", pos );
 		//m_mltFilterJack->set("_sync_pos", (int32_t)pos);
-		//m_mltConsumer->set("refresh", 1);
+//		m_mltConsumer->purge();
+		m_mltConsumer->set("refresh", 1);
 	}
 }
 
