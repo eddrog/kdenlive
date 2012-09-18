@@ -206,8 +206,10 @@ public:
     int seekPosition() const;
     
 public slots:
+    /** @brief Send seek request to MLT. */
     void seekCursorPos(int pos);
-    void setCursorPos(int pos, bool seek = true);
+    /** @brief Move timeline cursor to new position. */
+    void setCursorPos(int pos);
     void moveCursorPos(int delta);
     void updateCursorPos();
     void slotDeleteEffect(ClipItem *clip, int track, QDomElement effect, bool affectGroup = true);
@@ -516,7 +518,7 @@ signals:
     /** @brief Update the track effect button that shows if a track has effects or not.*/
     void updateTrackEffectState(int);
     /** @brief Cursor position changed, repaint ruler.*/
-    void updateRuler(int min, int max);
+    void updateRuler();
 };
 
 #endif

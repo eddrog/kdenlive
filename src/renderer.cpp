@@ -206,15 +206,23 @@ void Render::buildConsumer(const QString &profileName)
     delete m_blackClip;
     m_blackClip = NULL;
 
-    //TODO: uncomment following line when everything is clean
-    // uncommented Feb 2011 --Granjow
-    if (m_mltProfile) delete m_mltProfile;
     m_activeProfile = profileName;
-    char *tmp = qstrdup(m_activeProfile.toUtf8().constData());
-    setenv("MLT_PROFILE", tmp, 1);
-    m_mltProfile = new Mlt::Profile(tmp);
+    if (m_mltProfile) {
+	Mlt::Profile tmpProfile(m_activeProfile.toUtf8().constData());
+	m_mltProfile->set_colorspace(tmpProfile.colorspace());
+	m_mltProfile->set_frame_rate(tmpProfile.frame_rate_num(), tmpProfile.frame_rate_den());
+	m_mltProfile->set_height(tmpProfile.height());
+	m_mltProfile->set_width(tmpProfile.width());
+	m_mltProfile->set_progressive(tmpProfile.progressive());
+	m_mltProfile->set_sample_aspect(tmpProfile.sample_aspect_num(), tmpProfile.sample_aspect_den());
+	m_mltProfile->get_profile()->display_aspect_num = tmpProfile.display_aspect_num();
+	m_mltProfile->get_profile()->display_aspect_den = tmpProfile.display_aspect_den();
+    }
+    else {
+	m_mltProfile = new Mlt::Profile(m_activeProfile.toUtf8().constData());
+    }
+    setenv("MLT_PROFILE", m_activeProfile.toUtf8().constData(), 1);
     m_mltProfile->set_explicit(true);
-    delete[] tmp;
 
     m_blackClip = new Mlt::Producer(*m_mltProfile, "colour", "black");
     m_blackClip->set("id", "black");
@@ -228,16 +236,16 @@ void Render::buildConsumer(const QString &profileName)
         if (device >= 0) {
             if (BMInterface::isSupportedProfile(device, profileProperties)) {
                 QString decklink = "decklink:" + QString::number(KdenliveSettings::blackmagic_output_device());
-                tmp = qstrdup(decklink.toUtf8().constData());
-                m_mltConsumer = new Mlt::Consumer(*m_mltProfile, tmp);
-                delete[] tmp;
+                if (!m_mltConsumer) {
+		    m_mltConsumer = new Mlt::Consumer(*m_mltProfile, decklink.toUtf8().constData());
+		    m_showFrameEvent = m_mltConsumer->listen("consumer-frame-show", this, (mlt_listener) consumer_frame_show);
+		    mlt_log_set_callback(kdenlive_callback);
+		}
                 if (m_mltConsumer->is_valid()) {
                     m_externalConsumer = true;
-                    m_showFrameEvent = m_mltConsumer->listen("consumer-frame-show", this, (mlt_listener) consumer_frame_show);
                     m_mltConsumer->set("terminate_on_pause", 0);
                     m_mltConsumer->set("deinterlace_method", "onefield");
                     m_mltConsumer->set("real_time", KdenliveSettings::mltthreads());
-                    mlt_log_set_callback(kdenlive_callback);
                 }
                 if (m_mltConsumer && m_mltConsumer->is_valid()) return;
             } else KMessageBox::informationList(qApp->activeWindow(), i18n("Your project's profile %1 is not compatible with the blackmagic output card. Please see supported profiles below. Switching to normal video display.", m_mltProfile->description()), BMInterface::supportedModes(KdenliveSettings::blackmagic_output_device()));
@@ -259,15 +267,19 @@ void Render::buildConsumer(const QString &profileName)
     //m_mltConsumer->set("fullscreen", 1);
     if (m_winid == 0) {
         // OpenGL monitor
-        m_mltConsumer = new Mlt::Consumer(*m_mltProfile, "sdl_audio");
+        if (!m_mltConsumer) {
+	    m_mltConsumer = new Mlt::Consumer(*m_mltProfile, "sdl_audio");
+	    m_showFrameEvent = m_mltConsumer->listen("consumer-frame-show", this, (mlt_listener) consumer_gl_frame_show);
+	}
         m_mltConsumer->set("preview_off", 1);
         m_mltConsumer->set("preview_format", mlt_image_rgb24a);
-        m_showFrameEvent = m_mltConsumer->listen("consumer-frame-show", this, (mlt_listener) consumer_gl_frame_show);
     } else {
-        m_mltConsumer = new Mlt::FilteredConsumer(*m_mltProfile, "sdl_preview");
-        m_showFrameEvent = m_mltConsumer->listen("consumer-frame-show", this, (mlt_listener) consumer_frame_show);
-        m_pauseEvent = m_mltConsumer->listen("consumer-sdl-paused", this, (mlt_listener) consumer_paused);
-        m_mltConsumer->set("window_id", m_winid);
+        if (!m_mltConsumer) {
+	    m_mltConsumer = new Mlt::FilteredConsumer(*m_mltProfile, "sdl_preview");
+	  m_showFrameEvent = m_mltConsumer->listen("consumer-frame-show", this, (mlt_listener) consumer_frame_show);
+	  m_pauseEvent = m_mltConsumer->listen("consumer-sdl-paused", this, (mlt_listener) consumer_paused);
+	}
+	m_mltConsumer->set("window_id", m_winid);
     }
     m_mltConsumer->set("resize", 1);
     m_mltConsumer->set("terminate_on_pause", 1);
@@ -341,12 +353,6 @@ int Render::resetProfile(const QString &profileName, bool dropSceneList)
         if (m_isSplitView) slotSplitView(false);
         if (!m_mltConsumer->is_stopped()) m_mltConsumer->stop();
         m_mltConsumer->purge();
-        if (m_showFrameEvent) delete m_showFrameEvent;
-        m_showFrameEvent = NULL;
-        if (m_pauseEvent) delete m_pauseEvent;
-        m_pauseEvent = NULL;
-        delete m_mltConsumer;
-        m_mltConsumer = NULL;
     }
     QString scene;
     if (!dropSceneList) scene = sceneList();
@@ -557,26 +563,25 @@ void Render::slotSplitView(bool doit)
                 transition->set("b_track", i);
                 transition->set("distort", 1);
                 transition->set("internal_added", "200");
-                const char *tmp;
+                QString geometry;
                 switch (screen) {
                 case 0:
-                    tmp = "0,0:50%x50%";
+                    geometry = "0/0:50%x50%";
                     break;
                 case 1:
-                    tmp = "50%,0:50%x50%";
+                    geometry = "50%/0:50%x50%";
                     break;
                 case 2:
-                    tmp = "0,50%:50%x50%";
+                    geometry = "0/50%:50%x50%";
                     break;
                 case 3:
                 default:
-                    tmp = "50%,50%:50%x50%";
+                    geometry = "50%/50%:50%x50%";
                     break;
                 }
-                transition->set("geometry", tmp);
+                transition->set("geometry", geometry.toUtf8().constData());
                 transition->set("always_active", "1");
                 field->plant_transition(*transition, 0, i);
-                //delete[] tmp;
                 screen++;
             }
         }
@@ -887,41 +892,53 @@ void Render::processFileProperties()
             }
         }
 
-        // Get frame rate
-        int vindex = producer->get_int("video_index");
-
-	// List streams
-	int streams = producer->get_int("meta.media.nb_streams");
-	QList <int> audio_list;
-	QList <int> video_list;
-	for (int i = 0; i < streams; i++) {
-	    QByteArray propertyName = QString("meta.media.%1.stream.type").arg(i).toLocal8Bit();
-	    QString type = producer->get(propertyName.data());
-	    if (type == "audio") audio_list.append(i);
-	    else if (type == "video") video_list.append(i);
-	}
-
-	if (!info.xml.hasAttribute("video_index") && video_list.count() > 1) {
-	    // Clip has more than one video stream, ask which one should be used
-	    QMap <QString, QString> data;
-	    if (info.xml.hasAttribute("group")) data.insert("group", info.xml.attribute("group"));
-	    if (info.xml.hasAttribute("groupId")) data.insert("groupId", info.xml.attribute("groupId"));
-	    emit multiStreamFound(path, audio_list, video_list, data);
-	    // Force video index so that when reloading the clip we don't ask again for other streams
-	    filePropertyMap["video_index"] = QString::number(vindex);
-	}
+	int vindex = -1;
+	const QString mltService = producer->get("mlt_service");
 	
-        if (vindex > -1) {
-            snprintf(property, sizeof(property), "meta.media.%d.stream.frame_rate", vindex);
-            if (producer->get(property))
-                filePropertyMap["fps"] = producer->get(property);
-        }
+	if (mltService == "xml" || mltService == "consumer") {
+	    // MLT playlist
+	    mlt_profile prof = producer->get_profile();
+	    filePropertyMap["progressive"] = QString::number(prof->progressive);
+	    filePropertyMap["colorspace"] = QString::number(prof->colorspace);
+	    filePropertyMap["fps"] = QString::number(mlt_profile_fps(prof));
+	}
+	else if (mltService == "avformat") {
+	    // Get frame rate
+	    vindex = producer->get_int("video_index");
 
-        if (!filePropertyMap.contains("fps")) {
-            if (producer->get_double("meta.media.frame_rate_den") > 0) {
-                filePropertyMap["fps"] = locale.toString(producer->get_double("meta.media.frame_rate_num") / producer->get_double("meta.media.frame_rate_den"));
-            } else filePropertyMap["fps"] = producer->get("source_fps");
-        }
+	    // List streams
+	    int streams = producer->get_int("meta.media.nb_streams");
+	    QList <int> audio_list;
+	    QList <int> video_list;
+	    for (int i = 0; i < streams; i++) {
+		QByteArray propertyName = QString("meta.media.%1.stream.type").arg(i).toLocal8Bit();
+		QString type = producer->get(propertyName.data());
+		if (type == "audio") audio_list.append(i);
+		else if (type == "video") video_list.append(i);
+	    }
+
+	    if (!info.xml.hasAttribute("video_index") && video_list.count() > 1) {
+		// Clip has more than one video stream, ask which one should be used
+		QMap <QString, QString> data;
+		if (info.xml.hasAttribute("group")) data.insert("group", info.xml.attribute("group"));
+		if (info.xml.hasAttribute("groupId")) data.insert("groupId", info.xml.attribute("groupId"));
+		emit multiStreamFound(path, audio_list, video_list, data);
+		// Force video index so that when reloading the clip we don't ask again for other streams
+		filePropertyMap["video_index"] = QString::number(vindex);
+	    }
+	
+	    if (vindex > -1) {
+		snprintf(property, sizeof(property), "meta.media.%d.stream.frame_rate", vindex);
+		if (producer->get(property))
+		    filePropertyMap["fps"] = producer->get(property);
+	    }
+
+	    if (!filePropertyMap.contains("fps")) {
+		if (producer->get_double("meta.media.frame_rate_den") > 0) {
+		    filePropertyMap["fps"] = locale.toString(producer->get_double("meta.media.frame_rate_num") / producer->get_double("meta.media.frame_rate_den"));
+		} else filePropertyMap["fps"] = producer->get("source_fps");
+	    }
+	}
 
         Mlt::Frame *frame = producer->get_frame();
         if (frame && frame->is_valid()) {
@@ -965,61 +982,63 @@ void Render::processFileProperties()
         // Retrieve audio / video codec name
         // If there is a
 
-        if (vindex > -1) {
-            /*if (context->duration == AV_NOPTS_VALUE) {
-            kDebug() << " / / / / / / / /ERROR / / / CLIP HAS UNKNOWN DURATION";
-                emit removeInvalidClip(clipId);
-            delete producer;
-            return;
-            }*/
-            // Get the video_index
-            int video_max = 0;
-            int default_audio = producer->get_int("audio_index");
-            int audio_max = 0;
+        if (mltService == "avformat") {
+	    if (vindex > -1) {
+		/*if (context->duration == AV_NOPTS_VALUE) {
+		kDebug() << " / / / / / / / /ERROR / / / CLIP HAS UNKNOWN DURATION";
+		    emit removeInvalidClip(clipId);
+		delete producer;
+		return;
+		}*/
+		// Get the video_index
+		int video_max = 0;
+		int default_audio = producer->get_int("audio_index");
+		int audio_max = 0;
 
-            int scan = producer->get_int("meta.media.progressive");
-            filePropertyMap["progressive"] = QString::number(scan);
+		int scan = producer->get_int("meta.media.progressive");
+		filePropertyMap["progressive"] = QString::number(scan);
 
-            // Find maximum stream index values
-            for (int ix = 0; ix < producer->get_int("meta.media.nb_streams"); ix++) {
-                snprintf(property, sizeof(property), "meta.media.%d.stream.type", ix);
-                QString type = producer->get(property);
-                if (type == "video")
-                    video_max = ix;
-                else if (type == "audio")
-                    audio_max = ix;
-            }
-            filePropertyMap["default_video"] = QString::number(vindex);
-            filePropertyMap["video_max"] = QString::number(video_max);
-            filePropertyMap["default_audio"] = QString::number(default_audio);
-            filePropertyMap["audio_max"] = QString::number(audio_max);
+		// Find maximum stream index values
+		for (int ix = 0; ix < producer->get_int("meta.media.nb_streams"); ix++) {
+		    snprintf(property, sizeof(property), "meta.media.%d.stream.type", ix);
+		    QString type = producer->get(property);
+		    if (type == "video")
+			video_max = ix;
+		    else if (type == "audio")
+			audio_max = ix;
+		}
+		filePropertyMap["default_video"] = QString::number(vindex);
+		filePropertyMap["video_max"] = QString::number(video_max);
+		filePropertyMap["default_audio"] = QString::number(default_audio);
+		filePropertyMap["audio_max"] = QString::number(audio_max);
 
-            snprintf(property, sizeof(property), "meta.media.%d.codec.long_name", vindex);
-            if (producer->get(property)) {
-                filePropertyMap["videocodec"] = producer->get(property);
-            } else {
-                snprintf(property, sizeof(property), "meta.media.%d.codec.name", vindex);
-                if (producer->get(property))
-                    filePropertyMap["videocodec"] = producer->get(property);
-            }
-            QString query;
-            query = QString("meta.media.%1.codec.pix_fmt").arg(vindex);
-            filePropertyMap["pix_fmt"] = producer->get(query.toUtf8().constData());
-            filePropertyMap["colorspace"] = producer->get("meta.media.colorspace");
+		snprintf(property, sizeof(property), "meta.media.%d.codec.long_name", vindex);
+		if (producer->get(property)) {
+		    filePropertyMap["videocodec"] = producer->get(property);
+		} else {
+		    snprintf(property, sizeof(property), "meta.media.%d.codec.name", vindex);
+		    if (producer->get(property))
+			filePropertyMap["videocodec"] = producer->get(property);
+		}
+		QString query;
+		query = QString("meta.media.%1.codec.pix_fmt").arg(vindex);
+		filePropertyMap["pix_fmt"] = producer->get(query.toUtf8().constData());
+		filePropertyMap["colorspace"] = producer->get("meta.media.colorspace");
 
-        } else kDebug() << " / / / / /WARNING, VIDEO CONTEXT IS NULL!!!!!!!!!!!!!!";
-        if (producer->get_int("audio_index") > -1) {
-            // Get the audio_index
-            int index = producer->get_int("audio_index");
-            snprintf(property, sizeof(property), "meta.media.%d.codec.long_name", index);
-            if (producer->get(property)) {
-                filePropertyMap["audiocodec"] = producer->get(property);
-            } else {
-                snprintf(property, sizeof(property), "meta.media.%d.codec.name", index);
-                if (producer->get(property))
-                    filePropertyMap["audiocodec"] = producer->get(property);
-            }
-        }
+	    } else kDebug() << " / / / / /WARNING, VIDEO CONTEXT IS NULL!!!!!!!!!!!!!!";
+	    if (producer->get_int("audio_index") > -1) {
+		// Get the audio_index
+		int index = producer->get_int("audio_index");
+		snprintf(property, sizeof(property), "meta.media.%d.codec.long_name", index);
+		if (producer->get(property)) {
+		    filePropertyMap["audiocodec"] = producer->get(property);
+		} else {
+		    snprintf(property, sizeof(property), "meta.media.%d.codec.name", index);
+		    if (producer->get(property))
+			filePropertyMap["audiocodec"] = producer->get(property);
+		}
+	    }
+	}
 
         // metadata
         Mlt::Properties metadata;
@@ -1653,7 +1672,8 @@ double Render::playSpeed() const
 
 GenTime Render::seekPosition() const
 {
-    if (m_mltProducer) return GenTime((int) m_mltProducer->position(), m_fps);
+    if (m_mltConsumer) return GenTime((int) m_mltConsumer->position(), m_fps);
+    //if (m_mltProducer) return GenTime((int) m_mltProducer->position(), m_fps);
     else return GenTime();
 }
 
@@ -3583,7 +3603,7 @@ bool Render::mltMoveClip(int startTrack, int endTrack, int moveStart, int moveEn
             // check if we are moving a slowmotion producer
             QString serv = clipProducer->parent().get("mlt_service");
             QString currentid = clipProducer->parent().get("id");
-            if (serv == "framebuffer" || currentid.endsWith("_video")) {
+            if (serv == "framebuffer") {
                 clip = clipProducer;
             } else {
                 if (prod == NULL) {
