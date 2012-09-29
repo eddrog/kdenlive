@@ -699,7 +699,6 @@ void Render::processFileProperties()
         KUrl url(path);
         Mlt::Producer *producer = NULL;
         CLIPTYPE type = (CLIPTYPE)info.xml.attribute("type").toInt();
-
         if (type == COLOR) {
             producer = new Mlt::Producer(*m_mltProfile, 0, ("colour:" + info.xml.attribute("colour")).toUtf8().constData());
         } else if (type == TEXT) {
@@ -707,15 +706,23 @@ void Render::processFileProperties()
             if (producer && producer->is_valid() && info.xml.hasAttribute("xmldata"))
                 producer->set("xmldata", info.xml.attribute("xmldata").toUtf8().constData());
         } else if (url.isEmpty()) {
+	    //WARNING: when is this case used? Not sure it is working.. JBM/
             QDomDocument doc;
             QDomElement mlt = doc.createElement("mlt");
             QDomElement play = doc.createElement("playlist");
+	    play.setAttribute("id", "playlist0");
             doc.appendChild(mlt);
             mlt.appendChild(play);
             play.appendChild(doc.importNode(info.xml, true));
+	    QDomElement tractor = doc.createElement("tractor");
+	    tractor.setAttribute("id", "tractor0");
+	    QDomElement track = doc.createElement("track");
+	    track.setAttribute("producer", "playlist0");
+	    tractor.appendChild(track);
+	    mlt.appendChild(tractor);
             producer = new Mlt::Producer(*m_mltProfile, "xml-string", doc.toString().toUtf8().constData());
         } else {
-            producer = new Mlt::Producer(*m_mltProfile, path.toUtf8().constData());
+	    producer = new Mlt::Producer(*m_mltProfile, path.toUtf8().constData());
         }
 
         if (producer == NULL || producer->is_blank() || !producer->is_valid()) {
@@ -800,12 +807,12 @@ void Render::processFileProperties()
         if (type == COLOR || type == TEXT || type == IMAGE || type == SLIDESHOW) {
             int length;
             if (info.xml.hasAttribute("length")) {
-                if (clipOut > 0) duration = clipOut + 1;
                 length = info.xml.attribute("length").toInt();
                 clipOut = length - 1;
             }
             else length = info.xml.attribute("out").toInt() - info.xml.attribute("in").toInt();
             producer->set("length", length);
+	    duration = length;
         }
 
         if (clipOut > 0) producer->set_in_and_out(info.xml.attribute("in").toInt(), clipOut);
@@ -841,7 +848,6 @@ void Render::processFileProperties()
         char property[200];
 
         if (frameNumber > 0) producer->seek(frameNumber);
-
         duration = duration > 0 ? duration : producer->get_playtime();
         filePropertyMap["duration"] = QString::number(duration);
         //kDebug() << "///////  PRODUCER: " << url.path() << " IS: " << producer->get_playtime();
@@ -894,13 +900,16 @@ void Render::processFileProperties()
 
 	int vindex = -1;
 	const QString mltService = producer->get("mlt_service");
-	
 	if (mltService == "xml" || mltService == "consumer") {
-	    // MLT playlist
-	    mlt_profile prof = producer->get_profile();
-	    filePropertyMap["progressive"] = QString::number(prof->progressive);
-	    filePropertyMap["colorspace"] = QString::number(prof->colorspace);
-	    filePropertyMap["fps"] = QString::number(mlt_profile_fps(prof));
+	    // MLT playlist, create producer with blank profile to get real profile info
+	    // TODO: is there an easier way to get this info (original source clip profile) from MLT?
+	    Mlt::Profile *original_profile = new Mlt::Profile();
+	    Mlt::Producer *tmpProd = new Mlt::Producer(*original_profile, path.toUtf8().constData());
+	    filePropertyMap["progressive"] = QString::number(original_profile->progressive());
+	    filePropertyMap["colorspace"] = QString::number(original_profile->colorspace());
+	    filePropertyMap["fps"] = QString::number(original_profile->fps());
+	    delete tmpProd;
+	    delete original_profile;
 	}
 	else if (mltService == "avformat") {
 	    // Get frame rate
@@ -1247,7 +1256,6 @@ int Render::setSceneList(QString playlist, int position)
 
     blockSignals(true);
     m_locale = QLocale();
-
     m_mltProducer = new Mlt::Producer(*m_mltProfile, "xml-string", playlist.toUtf8().constData());
     if (!m_mltProducer || !m_mltProducer->is_valid()) {
         kDebug() << " WARNING - - - - -INVALID PLAYLIST: " << playlist.toUtf8().constData();
@@ -4135,6 +4143,7 @@ const QList <Mlt::Producer *> Render::producersList()
         Mlt::Producer trackProducer(tt);
         delete tt;
         Mlt::Playlist trackPlaylist((mlt_playlist) trackProducer.get_service());
+	if (!trackPlaylist.is_valid()) continue;
         int clipNb = trackPlaylist.count();
         for (int i = 0; i < clipNb; i++) {
             Mlt::Producer *c = trackPlaylist.get_clip(i);
@@ -4167,6 +4176,7 @@ void Render::fillSlowMotionProducers()
         Mlt::Producer trackProducer(tt);
         delete tt;
         Mlt::Playlist trackPlaylist((mlt_playlist) trackProducer.get_service());
+	if (!trackPlaylist.is_valid()) continue;
         int clipNb = trackPlaylist.count();
         for (int i = 0; i < clipNb; i++) {
             Mlt::Producer *c = trackPlaylist.get_clip(i);
@@ -4537,7 +4547,22 @@ bool Render::getBlackMagicOutputDeviceList(KComboBox *devicelist)
 }
 
 void Render::slotMultiStreamProducerFound(const QString path, QList<int> audio_list, QList<int> video_list, stringMap data)
-{
+{ 
+    if (KdenliveSettings::automultistreams()) {
+	for (int i = 1; i < video_list.count(); i++) {
+	    int vindex = video_list.at(i);
+	    int aindex = 0;
+	    if (i <= audio_list.count() -1) {
+		aindex = audio_list.at(i);
+	    }
+	    data.insert("video_index", QString::number(vindex));
+	    data.insert("audio_index", QString::number(aindex));
+	    data.insert("bypassDuplicate", "1");
+	    emit addClip(KUrl(path), data);
+	}
+	return;
+    }
+    
     int width = 60.0 * m_mltProfile->dar();
     int swidth = 60.0 * m_mltProfile->width() / m_mltProfile->height();
     if (width % 2 == 1) width++;
@@ -4557,13 +4582,12 @@ void Render::slotMultiStreamProducerFound(const QString path, QList<int> audio_l
     for (int j = 1; j < video_list.count(); j++) {
 	Mlt::Producer multiprod(* m_mltProfile, path.toUtf8().constData());
 	multiprod.set("video_index", video_list.at(j));
-	kDebug()<<"// LOADING: "<<j<<" = "<<video_list.at(j);
 	QImage thumb = KThumb::getFrame(&multiprod, 0, swidth, width, 60);
 	QGroupBox *streamFrame = new QGroupBox(i18n("Video stream %1", video_list.at(j)), content);
 	streamFrame->setProperty("vindex", video_list.at(j));
 	groupList << streamFrame;
 	streamFrame->setCheckable(true);
-	streamFrame->setChecked(false);
+	streamFrame->setChecked(true);
 	QVBoxLayout *vh = new QVBoxLayout( streamFrame );
 	QLabel *iconLabel = new QLabel(content);
 	iconLabel->setPixmap(QPixmap::fromImage(thumb));
@@ -4574,7 +4598,7 @@ void Render::slotMultiStreamProducerFound(const QString path, QList<int> audio_l
 		cb->addItem(i18n("Audio stream %1", audio_list.at(k)), audio_list.at(k));
 	    }
 	    comboList << cb;
-	    cb->setCurrentIndex(j);
+	    cb->setCurrentIndex(qMin(j, audio_list.count() - 1));
 	    vh->addWidget(cb);
 	}
 	vbox->addWidget(streamFrame);

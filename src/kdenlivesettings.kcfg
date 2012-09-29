@@ -55,6 +55,11 @@
       <default>false</default>
     </entry>
 
+    <entry name="automultistreams" type="Bool">
+      <label>Automatically import all streams in multi streams clips.</label>
+      <default>false</default>
+    </entry>
+
     <entry name="title_duration" type="String">
       <label>Default title clip duration.</label>
       <default>00:00:05:00</default>
@@ -579,7 +584,7 @@
        </entry>
        <entry name="dragvalue_directupdate" type="Bool">
            <label>...</label>
-           <default>false</default>
+           <default>true</default>
        </entry>
    </group>
 
@@ -806,7 +811,7 @@
       <default>true</default>
     </entry>
     
-    <entry name="add_clip_cut" type="Bool">
+    <entry name="add_new_clip" type="Bool">
       <label>Add cutted clips to project after transcoding.</label>
       <default>true</default>
     </entry>

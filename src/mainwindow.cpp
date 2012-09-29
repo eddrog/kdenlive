@@ -812,7 +812,7 @@ void MainWindow::generateClip()
     QAction *action = qobject_cast<QAction *>(sender());
     ClipGenerator *iGenerator = qobject_cast<ClipGenerator *>(action->parent());
 
-    KUrl clipUrl = iGenerator->generatedClip(action->data().toString(), m_activeDocument->projectFolder(),
+    KUrl clipUrl = iGenerator->generatedClip(KdenliveSettings::rendererpath(), action->data().toString(), m_activeDocument->projectFolder(),
                    QStringList(), QStringList(), m_activeDocument->fps(), m_activeDocument->width(), m_activeDocument->height());
     if (!clipUrl.isEmpty()) {
         m_projectList->slotAddClip(QList <QUrl> () << clipUrl);
@@ -3112,7 +3112,7 @@ void MainWindow::slotEditItemDuration()
         m_activeTimeline->projectView()->editItemDuration();
 }
 
-void MainWindow::slotAddProjectClip(KUrl url, QMap <QString, QString> data)
+void MainWindow::slotAddProjectClip(KUrl url, stringMap data)
 {
     if (m_activeDocument) {
         m_activeDocument->slotAddClipFile(url, data);
@@ -3320,6 +3320,9 @@ void MainWindow::slotShowClipProperties(DocClipBase *clip)
     // any type of clip but a title
     ClipProperties *dia = new ClipProperties(clip, m_activeDocument->timecode(), m_activeDocument->fps(), this);
     connect(dia, SIGNAL(addMarker(const QString &, GenTime, QString)), m_activeTimeline->projectView(), SLOT(slotAddClipMarker(const QString &, GenTime, QString)));
+    connect(m_activeTimeline->projectView(), SIGNAL(updateClipMarkers(DocClipBase *)), dia, SLOT(slotFillMarkersList(DocClipBase *)));
+    connect(dia, SIGNAL(loadMarkers(const QString &)), m_activeTimeline->projectView(), SLOT(slotLoadClipMarkers(const QString &)));
+    connect(dia, SIGNAL(saveMarkers(const QString &)), m_activeTimeline->projectView(), SLOT(slotSaveClipMarkers(const QString &)));
     connect(dia, SIGNAL(deleteProxy(const QString)), m_projectList, SLOT(slotDeleteProxy(const QString)));
     connect(dia, SIGNAL(applyNewClipProperties(const QString, QMap <QString, QString> , QMap <QString, QString> , bool, bool)), this, SLOT(slotApplyNewClipProperties(const QString, QMap <QString, QString> , QMap <QString, QString> , bool, bool)));
     dia->show();
@@ -4507,7 +4510,7 @@ void MainWindow::slotDownloadResources()
     if (m_activeDocument) currentFolder = m_activeDocument->projectFolder().path();
     else currentFolder = KdenliveSettings::defaultprojectfolder();
     ResourceWidget *d = new ResourceWidget(currentFolder);
-    connect(d, SIGNAL(addClip(KUrl, QMap <QString, QString>)), this, SLOT(slotAddProjectClip(KUrl, QMap <QString, QString>)));
+    connect(d, SIGNAL(addClip(KUrl,stringMap)), this, SLOT(slotAddProjectClip(KUrl,stringMap)));
     d->show();
 }
 
