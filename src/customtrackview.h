@@ -298,6 +298,8 @@ public slots:
     
     void slotAddEffect(ClipItem *clip, QDomElement effect);
 
+    void slotOnPlayheadKeyPressed();
+
 protected:
     virtual void drawBackground(QPainter * painter, const QRectF & rect);
     //virtual void drawForeground ( QPainter * painter, const QRectF & rect );

@@ -402,6 +402,13 @@ void CustomTrackView::slotCheckPositionScrolling()
     }
 }
 
+void CustomTrackView::slotOnPlayheadKeyPressed()
+{
+	QPoint p = mapFromGlobal(QCursor::pos());
+	int mappedXPos = qMax((int)(mapToScene(p).x() + 0.5), 0);
+    seekCursorPos(mappedXPos);
+//    slotCheckPositionScrolling();
+}
 
 // virtual
 void CustomTrackView::mouseMoveEvent(QMouseEvent * event)
