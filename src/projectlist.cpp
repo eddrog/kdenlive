@@ -310,8 +310,9 @@ ProjectList::ProjectList(QWidget *parent) :
     connect(m_listView, SIGNAL(projectModified()), this, SIGNAL(projectModified()));
     connect(m_listView, SIGNAL(itemSelectionChanged()), this, SLOT(slotClipSelected()));
     connect(m_listView, SIGNAL(focusMonitor()), this, SIGNAL(raiseClipMonitor()));
-    connect(m_listView, SIGNAL(pauseMonitor()), this, SLOT(slotPauseMonitor()));
+    connect(m_listView, SIGNAL(pauseMonitor()), this, SIGNAL(pauseMonitor()));
     connect(m_listView, SIGNAL(requestMenu(const QPoint &, QTreeWidgetItem *)), this, SLOT(slotContextMenu(const QPoint &, QTreeWidgetItem *)));
+    connect(m_listView, SIGNAL(addClip()), this, SIGNAL(pauseMonitor()));
     connect(m_listView, SIGNAL(addClip()), this, SLOT(slotAddClip()));
     connect(m_listView, SIGNAL(addClip(const QList <QUrl>, const QString &, const QString &)), this, SLOT(slotAddClip(const QList <QUrl>, const QString &, const QString &)));
     connect(this, SIGNAL(addClip(const QString, const QString &, const QString &)), this, SLOT(slotAddClip(const QString, const QString &, const QString &)));
@@ -1619,7 +1620,7 @@ QString ProjectList::getExtensions()
     QStringList mimeTypes = QStringList() << "application/x-kdenlive" << "application/x-kdenlivetitle" << "video/mlt-playlist" << "text/plain";
 
     // Video mimes
-    mimeTypes <<  "video/x-flv" << "application/vnd.rn-realmedia" << "video/x-dv" << "video/dv" << "video/x-msvideo" << "video/x-matroska" << "video/mpeg" << "video/ogg" << "video/x-ms-wmv" << "video/mp4" << "video/quicktime" << "video/webm" << "video/3gpp";
+    mimeTypes <<  "video/x-flv" << "application/vnd.rn-realmedia" << "video/x-dv" << "video/dv" << "video/x-msvideo" << "video/x-matroska" << "video/mpeg" << "video/ogg" << "video/x-ms-wmv" << "video/mp4" << "video/quicktime" << "video/webm" << "video/3gpp" << "video/mp2t";
 
     // Audio mimes
     mimeTypes << "audio/x-flac" << "audio/x-matroska" << "audio/mp4" << "audio/mpeg" << "audio/x-mp3" << "audio/ogg" << "audio/x-wav" << "audio/x-aiff" << "audio/aiff" << "application/ogg" << "application/mxf" << "application/x-shockwave-flash" << "audio/ac3";
@@ -2315,7 +2316,15 @@ void ProjectList::slotReplyGetImage(const QString &clipId, const QImage &img)
 {
     ProjectItem *item = getItemById(clipId);
     if (item && !img.isNull()) {
-        QPixmap pix = QPixmap::fromImage(img);
+	QPixmap pix(img.width(), img.height());
+	pix.fill(Qt::transparent);
+	QPainter p(&pix);
+	p.setRenderHint(QPainter::Antialiasing, true);
+	QPainterPath path;
+	path.addRoundedRect(0.5, 0.5, pix.width() - 1, pix.height() - 1, 2, 2);
+	p.setClipPath(path);
+	p.drawImage(0, 0, img);
+	p.end();
         processThumbOverlays(item, pix);
         monitorItemEditing(false);
         item->setData(0, Qt::DecorationRole, pix);

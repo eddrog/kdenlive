@@ -106,13 +106,11 @@ static void consumer_gl_frame_show(mlt_consumer, Render * self, mlt_frame frame_
 {
     // detect if the producer has finished playing. Is there a better way to do it?
     Mlt::Frame frame(frame_ptr);
-    self->showFrame(frame);
-    if (frame.get_double("_speed") == 0.0) {
-        self->emitConsumerStopped();
-    } else if (frame.get_double("_speed") < 0.0 && mlt_frame_get_position(frame_ptr) <= 0) {
-        self->pause();
-        self->emitConsumerStopped();
+    if (frame.get_double("_speed") < 0.0 && mlt_frame_get_position(frame_ptr) <= 0) {
+	self->pause();
+	self->emitConsumerStopped();
     }
+    self->showFrame(frame);
 }
 
 Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWidget *parent) :
@@ -140,9 +138,10 @@ Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWi
     m_mltConsumer->connect(*m_mltProducer);
     m_mltProducer->set_speed(0.0);
     m_refreshTimer.setSingleShot(true);
-    m_refreshTimer.setInterval(70);
+    m_refreshTimer.setInterval(100);
     connect(&m_refreshTimer, SIGNAL(timeout()), this, SLOT(refresh()));
     connect(this, SIGNAL(multiStreamFound(const QString &,QList<int>,QList<int>,stringMap)), this, SLOT(slotMultiStreamProducerFound(const QString &,QList<int>,QList<int>,stringMap)));
+    connect(this, SIGNAL(checkSeeking()), this, SLOT(slotCheckSeeking()));
 }
 
 Render::~Render()
@@ -420,7 +419,7 @@ void Render::seek(int time)
     if (requestedSeekPosition == SEEK_INACTIVE) {
 	requestedSeekPosition = time;
 	m_mltProducer->seek(time);
-	m_mltConsumer->purge();
+	//m_mltConsumer->purge();
 	if (m_mltProducer->get_speed() == 0) {
 	    refresh();
 	}
@@ -1679,7 +1678,7 @@ void Render::refresh()
         return;
     if (m_mltConsumer) {
         if (m_mltConsumer->is_stopped()) m_mltConsumer->start();
-        m_mltConsumer->purge();
+        //m_mltConsumer->purge();
         m_mltConsumer->set("refresh", 1);
     }
 }
@@ -1731,13 +1730,6 @@ void Render::emitFrameUpdated(Mlt::Frame& frame)
     const uchar* image = frame.get_image(format, width, height);
     QImage qimage(width, height, QImage::Format_ARGB32_Premultiplied);
     memcpy(qimage.scanLine(0), image, width * height * 4);
-
-    /*mlt_image_format format = mlt_image_rgb24;
-    int width = 0;
-    int height = 0;
-    const uchar* image = frame.get_image(format, width, height);
-    QImage qimage(width, height, QImage::Format_RGB888);
-    memcpy(qimage.bits(), image, width * height * 3);*/
     emit frameUpdated(qimage.rgbSwapped());
 }
 
@@ -1748,10 +1740,10 @@ void Render::emitFrameNumber()
     emit rendererPosition(currentPos);
     if (requestedSeekPosition != SEEK_INACTIVE) {
 	m_mltProducer->seek(requestedSeekPosition);
-	requestedSeekPosition = SEEK_INACTIVE;
 	if (m_mltProducer->get_speed() == 0) {
 	    refresh();
 	}
+	requestedSeekPosition = SEEK_INACTIVE;
     }
 }
 
@@ -1800,17 +1792,32 @@ void Render::exportCurrentFrame(KUrl url, bool /*notify*/)
 
 void Render::showFrame(Mlt::Frame& frame)
 {
-    emit rendererPosition((int) m_mltConsumer->position());
-    mlt_image_format format = mlt_image_rgb24a;
-    int width = 0;
-    int height = 0;
-    const uchar* image = frame.get_image(format, width, height);
-    QImage qimage(width, height, QImage::Format_ARGB32_Premultiplied);
-    memcpy(qimage.scanLine(0), image, width * height * 4);
-    emit showImageSignal(qimage);
-    if (analyseAudio) showAudio(frame);
-    if (sendFrameForAnalysis && frame.get_frame()->convert_image) {
-        emit frameUpdated(qimage.rgbSwapped());
+    int currentPos = m_mltConsumer->position();
+    if (currentPos == requestedSeekPosition) requestedSeekPosition = SEEK_INACTIVE;
+    emit rendererPosition(currentPos);
+    if (frame.is_valid()) {
+	mlt_image_format format = mlt_image_rgb24a;
+	int width = 0;
+	int height = 0;
+	const uchar* image = frame.get_image(format, width, height);
+	QImage qimage(width, height, QImage::Format_ARGB32_Premultiplied);
+	memcpy(qimage.scanLine(0), image, width * height * 4);
+	emit showImageSignal(qimage);
+	if (analyseAudio) showAudio(frame);
+	if (sendFrameForAnalysis && frame.get_frame()->convert_image) {
+	    emit frameUpdated(qimage.rgbSwapped());
+	}
+    }
+    emit checkSeeking();
+}
+
+void Render::slotCheckSeeking()
+{
+      if (requestedSeekPosition != SEEK_INACTIVE) {
+	m_mltProducer->seek(requestedSeekPosition);
+	if (m_mltProducer->get_speed() == 0) {
+	    refresh();
+	}
     }
 }
 

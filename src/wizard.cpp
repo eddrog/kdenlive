@@ -464,7 +464,13 @@ void Wizard::slotCheckPrograms()
     item = new QTreeWidgetItem(m_check.programList, QStringList() << QString() << i18n("xine"));
     item->setData(1, Qt::UserRole, i18n("Required to preview your DVD"));
     item->setSizeHint(0, itemSize);
-    if (KStandardDirs::findExe("xine").isEmpty()) item->setIcon(0, m_badIcon);
+    if (KStandardDirs::findExe("xine").isEmpty()) {
+	if (!KStandardDirs::findExe("vlc").isEmpty()) {
+	    item->setText(1, i18n("vlc"));
+	    item->setIcon(0, m_okIcon);
+	}
+	else item->setIcon(0, m_badIcon);
+    }
     else item->setIcon(0, m_okIcon);
 
     // set up some default applications
@@ -491,12 +497,19 @@ void Wizard::installExtraMimes(QString baseName, QStringList globs)
     QString mimefile = baseName;
     mimefile.replace('/', '-');
     KMimeType::Ptr mime = KMimeType::mimeType(baseName);
+    QStringList missingGlobs;
+    foreach(const QString & glob, globs) {
+	KMimeType::Ptr type = KMimeType::findByPath(glob, 0, true);
+	QString mimeName = type->name();
+        if (!mimeName.contains("audio") && !mimeName.contains("video")) missingGlobs << glob;
+    }
+    if (missingGlobs.isEmpty()) return;
     if (!mime) {
         kDebug() << "KMimeTypeTrader: mimeType " << baseName << " not found";
     } else {
         QStringList extensions = mime->patterns();
         QString comment = mime->comment();
-        foreach(const QString & glob, globs) {
+        foreach(const QString & glob, missingGlobs) {
             if (!extensions.contains(glob)) extensions << glob;
         }
         kDebug() << "EXTS: " << extensions;
@@ -617,6 +630,7 @@ void Wizard::adjustSettings()
 {
     if (m_extra.installmimes->isChecked()) {
         QStringList globs;
+	
         globs << "*.mts" << "*.m2t" << "*.mod" << "*.ts" << "*.m2ts" << "*.m2v";
         installExtraMimes("video/mpeg", globs);
         globs.clear();

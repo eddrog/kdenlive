@@ -158,7 +158,8 @@ MainWindow::MainWindow(const QString &MltPath, const KUrl & Url, const QString &
     m_jogShuttle(NULL),
 #endif
     m_findActivated(false),
-    m_stopmotion(NULL)
+    m_stopmotion(NULL),
+    m_mainClip(NULL)
 {
     qRegisterMetaType<QVector<int16_t> > ();
     qRegisterMetaType<stringMap> ("stringMap");
@@ -911,6 +912,7 @@ void MainWindow::slotUpdateClip(const QString &id)
 void MainWindow::slotConnectMonitors()
 {
     m_projectList->setRenderer(m_projectMonitor->render);
+    connect(m_projectList, SIGNAL(pauseMonitor()), m_monitorManager, SLOT(slotPause()));
     connect(m_projectList, SIGNAL(deleteProjectClips(QStringList, QMap<QString, QString>)), this, SLOT(slotDeleteProjectClips(QStringList, QMap<QString, QString>)));
     connect(m_projectList, SIGNAL(showClipProperties(DocClipBase *)), this, SLOT(slotShowClipProperties(DocClipBase *)));
     connect(m_projectList, SIGNAL(showClipProperties(QList <DocClipBase *>, QMap<QString, QString>)), this, SLOT(slotShowClipProperties(QList <DocClipBase *>, QMap<QString, QString>)));
@@ -3377,6 +3379,11 @@ void MainWindow::customEvent(QEvent* e)
 
 void MainWindow::slotTimelineClipSelected(ClipItem* item, bool raise)
 {
+    if (item != m_mainClip) {
+	if (m_mainClip) m_mainClip->setMainSelectedClip(false);
+	if (item) item->setMainSelectedClip(true);
+	m_mainClip = item;
+    }
     m_effectStack->slotClipItemSelected(item);
     m_projectMonitor->slotSetSelectedClip(item);
     if (raise)
