@@ -114,6 +114,10 @@ Q_OBJECT public:
 #ifdef USE_JACK
     void mltConnectJack();
     void mltDisconnectJack();
+    void startTransportSlave();
+    void stopTransportSlave();
+    Mlt::Filter * getJackFilter();
+    void setJackFilter(Mlt::Filter *mltFilterJack);
 #endif
 
     QPixmap getImageThumbnail(KUrl url, int width, int height);

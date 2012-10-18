@@ -4553,8 +4553,11 @@ void MainWindow::slotSaveTimelineClip()
 //#ifdef USE_JACK
 void MainWindow::slotConnectJack()
 {
+	Render * rp;
+	Render * rc;
+
 	if (m_projectMonitor != NULL) {
-		Render * rp = m_projectMonitor->render;
+		rp = m_projectMonitor->render;
 
 		if ( rp != NULL)
 		{
@@ -4565,17 +4568,18 @@ void MainWindow::slotConnectJack()
 		}
 	}
 
-//	if (m_clipMonitor != NULL)	{
-//		Render * rc = m_clipMonitor->render;
-//
-//		if ( rc != NULL )
-//		{
+	if (m_clipMonitor != NULL)	{
+		rc = m_clipMonitor->render;
+
+		if ( rc != NULL )
+		{
+			rc->setJackFilter(rp->getJackFilter());
 //			setenv("JACK_NAME_CLIP", "KdliveClipMon", 1);
 //			rc->mltConnectJack();
 //			unsetenv("JACK_NAME_CLIP");
 //			kDebug() << "Clip monitor connected to jack" << "\n";
-//		}
-//	}
+		}
+	}
 
 }
 

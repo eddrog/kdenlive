@@ -736,13 +736,19 @@ void Monitor::adjustRulerSize(int length)
 
 void Monitor::stop()
 {
-    if (render) render->stop();
+    if (render) {
+    	render->stop();
+    	render->stopTransportSlave();
+    }
 }
 
 void Monitor::start()
 {
     if (!isVisible() || !isActive()) return;
-    if (render) render->doRefresh();// start();
+    if (render) {
+    	render->startTransportSlave();
+    	render->doRefresh();// start();
+    }
 }
 
 void Monitor::refreshMonitor(bool visible)
