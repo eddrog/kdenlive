@@ -460,7 +460,7 @@ MainWindow::MainWindow(const QString &MltPath, const KUrl & Url, const QString &
 
     loadPlugins();
     loadTranscoders();
-    loadStabilize();
+    loadClipActions();
 
     m_projectMonitor->setupMenu(static_cast<QMenu*>(factory()->container("monitor_go", this)), m_playZone, m_loopZone, NULL, m_loopClip);
     m_clipMonitor->setupMenu(static_cast<QMenu*>(factory()->container("monitor_go", this)), m_playZone, m_loopZone, static_cast<QMenu*>(factory()->container("marker_menu", this)));
@@ -471,7 +471,7 @@ MainWindow::MainWindow(const QString &MltPath, const KUrl & Url, const QString &
 	menus.insert("addMenu",static_cast<QMenu*>(factory()->container("generators", this)));
         menus.insert("extractAudioMenu",static_cast<QMenu*>(factory()->container("extract_audio", this)));
 	menus.insert("transcodeMenu",static_cast<QMenu*>(factory()->container("transcoders", this)));
-	menus.insert("stabilizeMenu",static_cast<QMenu*>(factory()->container("stabilize", this)));
+	menus.insert("clipActionsMenu",static_cast<QMenu*>(factory()->container("clip_actions", this)));
 	menus.insert("inTimelineMenu",clipInTimeline);
     m_projectList->setupGeneratorMenu(menus);
 
@@ -2745,7 +2745,7 @@ void MainWindow::updateConfiguration()
 
     // Update list of transcoding profiles
     loadTranscoders();
-    loadStabilize();
+    loadClipActions();
 #ifdef USE_JOGSHUTTLE
     activateShuttleDevice();
 #endif
@@ -2845,11 +2845,11 @@ void MainWindow::slotAddClipMarker()
         return;
     }
     QString id = clip->getId();
-    CommentedTime marker(pos, i18n("Marker"));
+    CommentedTime marker(pos, i18n("Marker"), KdenliveSettings::default_marker_type());
     QPointer<MarkerDialog> d = new MarkerDialog(clip, marker,
                        m_activeDocument->timecode(), i18n("Add Marker"), this);
     if (d->exec() == QDialog::Accepted)
-        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker().time(), d->newMarker().comment());
+        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker());
     delete d;
 }
 
@@ -2925,20 +2925,20 @@ void MainWindow::slotEditClipMarker()
     }
 
     QString id = clip->getId();
-    QString oldcomment = clip->markerComment(pos);
-    if (oldcomment.isEmpty()) {
+    CommentedTime oldMarker = clip->markerAt(pos);
+    if (oldMarker == CommentedTime()) {
         m_messageLabel->setMessage(i18n("No marker found at cursor time"), ErrorMessage);
         return;
     }
 
-    CommentedTime marker(pos, oldcomment);
-    QPointer<MarkerDialog> d = new MarkerDialog(clip, marker,
+    QPointer<MarkerDialog> d = new MarkerDialog(clip, oldMarker,
                       m_activeDocument->timecode(), i18n("Edit Marker"), this);
     if (d->exec() == QDialog::Accepted) {
-        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker().time(), d->newMarker().comment());
+        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker());
         if (d->newMarker().time() != pos) {
             // remove old marker
-            m_activeTimeline->projectView()->slotAddClipMarker(id, pos, QString());
+            oldMarker.setMarkerType(-1);
+            m_activeTimeline->projectView()->slotAddClipMarker(id, oldMarker);
         }
     }
     delete d;
@@ -2957,8 +2957,9 @@ void MainWindow::slotAddMarkerGuideQuickly()
             m_messageLabel->setMessage(i18n("Cannot find clip to add marker"), ErrorMessage);
             return;
         }
-
-        m_activeTimeline->projectView()->slotAddClipMarker(clip->getId(), pos, m_activeDocument->timecode().getDisplayTimecode(pos, false));
+        //TODO: allow user to set default marker category
+	CommentedTime marker(pos, m_activeDocument->timecode().getDisplayTimecode(pos, false), KdenliveSettings::default_marker_type());
+        m_activeTimeline->projectView()->slotAddClipMarker(clip->getId(), marker);
     } else {
         m_activeTimeline->projectView()->slotAddGuide(false);
     }
@@ -3321,7 +3322,7 @@ void MainWindow::slotShowClipProperties(DocClipBase *clip)
 
     // any type of clip but a title
     ClipProperties *dia = new ClipProperties(clip, m_activeDocument->timecode(), m_activeDocument->fps(), this);
-    connect(dia, SIGNAL(addMarker(const QString &, GenTime, QString)), m_activeTimeline->projectView(), SLOT(slotAddClipMarker(const QString &, GenTime, QString)));
+    connect(dia, SIGNAL(addMarker(const QString &, CommentedTime)), m_activeTimeline->projectView(), SLOT(slotAddClipMarker(const QString &, CommentedTime)));
     connect(m_activeTimeline->projectView(), SIGNAL(updateClipMarkers(DocClipBase *)), dia, SLOT(slotFillMarkersList(DocClipBase *)));
     connect(dia, SIGNAL(loadMarkers(const QString &)), m_activeTimeline->projectView(), SLOT(slotLoadClipMarkers(const QString &)));
     connect(dia, SIGNAL(saveMarkers(const QString &)), m_activeTimeline->projectView(), SLOT(slotSaveClipMarkers(const QString &)));
@@ -3897,24 +3898,34 @@ void MainWindow::slotMaximizeCurrent(bool)
     kDebug() << "CURRENT WIDGET: " << par->objectName();
 }
 
-void MainWindow::loadStabilize()
+void MainWindow::loadClipActions()
 {
-	QMenu* stabMenu= static_cast<QMenu*>(factory()->container("stabilize", this));
-	if (stabMenu){
-		stabMenu->clear();
+	QMenu* actionMenu= static_cast<QMenu*>(factory()->container("clip_actions", this));
+	if (actionMenu){
+		actionMenu->clear();
 		Mlt::Profile profile;
-		if (Mlt::Factory::filter(profile,(char*)"videostab")){
-			QAction *action=stabMenu->addAction("Videostab (vstab)");
+		Mlt::Filter *filter = Mlt::Factory::filter(profile,(char*)"videostab");
+		if (filter) {
+			delete filter;
+			QAction *action=actionMenu->addAction(i18n("Stabilize (vstab)"));
 			action->setData("videostab");
 			connect(action,SIGNAL(triggered()), this, SLOT(slotStabilize()));
 		}
-		if (Mlt::Factory::filter(profile,(char*)"videostab2")){
-			QAction *action=stabMenu->addAction("Videostab (transcode)");
+		filter = Mlt::Factory::filter(profile,(char*)"videostab2");
+		if (filter) {
+			delete filter;
+			QAction *action=actionMenu->addAction(i18n("Stabilize (transcode)"));
 			action->setData("videostab2");
 			connect(action,SIGNAL(triggered()), this, SLOT(slotStabilize()));
 		}
+		filter = Mlt::Factory::filter(profile,(char*)"motion_est");
+		if (filter) {
+			delete filter;
+			QAction *action=actionMenu->addAction(i18n("Automatic scene split"));
+			action->setData("motion_est");
+			connect(action,SIGNAL(triggered()), this, SLOT(slotStabilize()));
+		}
 	}
-
 
 }
 

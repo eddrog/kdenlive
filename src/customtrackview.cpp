@@ -5251,16 +5251,23 @@ void CustomTrackView::clipEnd()
     }
 }
 
-void CustomTrackView::slotAddClipMarker(const QString &id, GenTime t, QString c, QUndoCommand *groupCommand)
+void CustomTrackView::slotAddClipMarker(const QString &id, CommentedTime newMarker, QUndoCommand *groupCommand)
 {
-    QString oldcomment = m_document->clipManager()->getClipById(id)->markerComment(t);
-    AddMarkerCommand *command = new AddMarkerCommand(this, oldcomment, c, id, t, groupCommand);
+    CommentedTime oldMarker = m_document->clipManager()->getClipById(id)->markerAt(newMarker.time());
+    if (oldMarker == CommentedTime()) {
+	oldMarker = newMarker;
+	oldMarker.setMarkerType(-1);
+    }
+    AddMarkerCommand *command = new AddMarkerCommand(this, oldMarker, newMarker, id, groupCommand);
     if (!groupCommand) m_commandStack->push(command);
 }
 
 void CustomTrackView::slotDeleteClipMarker(const QString &comment, const QString &id, const GenTime &position)
 {
-    AddMarkerCommand *command = new AddMarkerCommand(this, comment, QString(), id, position);
+    CommentedTime oldmarker(position, comment);
+    CommentedTime marker = oldmarker;
+    marker.setMarkerType(-1);
+    AddMarkerCommand *command = new AddMarkerCommand(this, oldmarker, marker, id);
     m_commandStack->push(command);
 }
 
@@ -5277,7 +5284,10 @@ void CustomTrackView::slotDeleteAllClipMarkers(const QString &id)
     deleteMarkers->setText("Delete clip markers");
 
     for (int i = 0; i < markers.size(); i++) {
-        new AddMarkerCommand(this, markers.at(i).comment(), QString(), id, markers.at(i).time(), deleteMarkers);
+	CommentedTime oldMarker = markers.at(i);
+	CommentedTime marker = oldMarker;
+	marker.setMarkerType(-1);
+        new AddMarkerCommand(this, oldMarker, marker, id, deleteMarkers);
     }
     m_commandStack->push(deleteMarkers);
 }
@@ -5286,18 +5296,39 @@ void CustomTrackView::slotSaveClipMarkers(const QString &id)
 {
     DocClipBase *base = m_document->clipManager()->getClipById(id);
     QList < CommentedTime > markers = base->commentedSnapMarkers();
-    QString data;
-    for (int i = 0; i < markers.count(); i++) {
-	data.append(QString::number(markers.at(i).time().seconds()));
-	data.append("\t");
-	data.append(QString::number(markers.at(i).time().seconds()));
-	data.append("\t");
-	data.append(markers.at(i).comment());
-	data.append("\n");
-    }
-    if (!data.isEmpty()) {
-	QString url = KFileDialog::getSaveFileName(KUrl("kfiledialog:///projectfolder"), "text/plain", this, i18n("Save markers"));
+    if (!markers.isEmpty()) {
+	// Set  up categories
+	QComboBox *cbox = new QComboBox;
+	cbox->insertItem(0, i18n("All categories"));
+	for (int i = 0; i < 5; ++i) {
+	    cbox->insertItem(i + 1, i18n("Category %1", i));
+	    cbox->setItemData(i + 1, CommentedTime::markerColor(i), Qt::DecorationRole);
+	}
+	cbox->setCurrentIndex(0);
+	KFileDialog fd(KUrl("kfiledialog:///projectfolder"), "text/plain", this, cbox);
+	fd.setMode(KFile::File);
+	fd.setOperationMode(KFileDialog::Saving);
+	fd.exec();
+	QString url = fd.selectedFile();
+	//QString url = KFileDialog::getSaveFileName(KUrl("kfiledialog:///projectfolder"), "text/plain", this, i18n("Save markers"));
 	if (url.isEmpty()) return;
+
+	QString data;
+	int category = cbox->currentIndex() - 1;
+	for (int i = 0; i < markers.count(); i++) {
+	    if (category >= 0) {
+		// Save only the markers in selected category
+		if (markers.at(i).markerType() != category) continue;
+	    }
+	    data.append(QString::number(markers.at(i).time().seconds()));
+	    data.append("\t");
+	    data.append(QString::number(markers.at(i).time().seconds()));
+	    data.append("\t");
+	    data.append(markers.at(i).comment());
+	    data.append("\n");
+	}
+	delete cbox;
+	
 	QFile file(url);
 	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
 	    emit displayMessage(i18n("Cannot open file %1", url), ErrorMessage);
@@ -5310,11 +5341,25 @@ void CustomTrackView::slotSaveClipMarkers(const QString &id)
 
 void CustomTrackView::slotLoadClipMarkers(const QString &id)
 {
-    KUrl url = KFileDialog::getOpenUrl(KUrl("kfiledialog:///projectfolder"), "text/plain", this, i18n("Load marker file"));
+    QComboBox *cbox = new QComboBox;
+    for (int i = 0; i < 5; ++i) {
+	cbox->insertItem(i, i18n("Category %1", i));
+	cbox->setItemData(i, CommentedTime::markerColor(i), Qt::DecorationRole);
+    }
+    cbox->setCurrentIndex(KdenliveSettings::default_marker_type());
+    KFileDialog fd(KUrl("kfiledialog:///projectfolder"), "text/plain", this, cbox);
+    fd.setMode(KFile::File);
+    fd.setOperationMode(KFileDialog::Opening);
+    fd.exec();
+    QString url = fd.selectedFile();
+	
+    //KUrl url = KFileDialog::getOpenUrl(KUrl("kfiledialog:///projectfolder"), "text/plain", this, i18n("Load marker file"));
     if (url.isEmpty()) return;
-    QFile file(url.path());
+    int category = cbox->currentIndex();
+    delete cbox;
+    QFile file(url);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-	emit displayMessage(i18n("Cannot open file %1", url.fileName()), ErrorMessage);
+	emit displayMessage(i18n("Cannot open file %1", KUrl(url).fileName()), ErrorMessage);
 	return;
     }
     QString data = QString::fromUtf8(file.readAll());
@@ -5353,19 +5398,24 @@ void CustomTrackView::slotLoadClipMarkers(const QString &id)
 	}
 	if (!markerText.isEmpty()) {
 	    // Marker found, add it
-	    slotAddClipMarker(id, GenTime(time1), markerText, command);
-	    if (time2 > 0 && time2 != time1) slotAddClipMarker(id, GenTime(time2), markerText, command);
+	    //TODO: allow user to set a marker category
+	    CommentedTime marker1(GenTime(time1), markerText, category);
+	    slotAddClipMarker(id, marker1, command);
+	    if (time2 > 0 && time2 != time1) {
+		CommentedTime marker2(GenTime(time2), markerText, category);
+		slotAddClipMarker(id, marker2, command);
+	    }
 	}
     }
     if (command->childCount() > 0) m_commandStack->push(command);
     else delete command;
 }
 
-void CustomTrackView::addMarker(const QString &id, const GenTime &pos, const QString &comment)
+void CustomTrackView::addMarker(const QString &id, const CommentedTime marker)
 {
     DocClipBase *base = m_document->clipManager()->getClipById(id);
-    if (!comment.isEmpty()) base->addSnapMarker(pos, comment);
-    else base->deleteSnapMarker(pos);
+    if (marker.markerType() < 0) base->deleteSnapMarker(marker.time());
+    else base->addSnapMarker(marker);
     emit updateClipMarkers(base);
     setDocumentModified();
     viewport()->update();
