@@ -26,6 +26,7 @@
 #include "commands/movetransitioncommand.h"
 #include "commands/resizeclipcommand.h"
 #include "commands/editguidecommand.h"
+#include "commands/addextradatacommand.h"
 #include "commands/addtimelineclipcommand.h"
 #include "commands/addeffectcommand.h"
 #include "commands/editeffectcommand.h"
@@ -425,7 +426,7 @@ void CustomTrackView::mouseMoveEvent(QMouseEvent * event)
     if (dragMode() == QGraphicsView::RubberBandDrag || (event->modifiers() == Qt::ControlModifier && m_tool != SPACERTOOL && m_operationMode != RESIZESTART && m_operationMode != RESIZEEND)) {
         event->setAccepted(true);
         m_moveOpMode = NONE;
-        QGraphicsView::mouseMoveEvent(event);
+        if (event->modifiers() != Qt::ControlModifier || dragMode() == QGraphicsView::RubberBandDrag) QGraphicsView::mouseMoveEvent(event);
         return;
     }
 
@@ -748,6 +749,10 @@ void CustomTrackView::mousePressEvent(QMouseEvent * event)
         setDragMode(QGraphicsView::RubberBandDrag);
         if (!(event->modifiers() & Qt::ControlModifier)) {
             resetSelectionGroup();
+	    if (m_dragItem) {
+		emit clipItemSelected(NULL);
+		m_dragItem = NULL;
+	    }
             scene()->clearSelection();
         }
         m_blockRefresh = false;
@@ -1222,6 +1227,9 @@ void CustomTrackView::groupSelectedItems(bool force, bool createNewGroup)
         return;
     }
     QList<QGraphicsItem *> selection = m_scene->selectedItems();
+    if (m_dragItem && !selection.contains(m_dragItem)) {
+	selection << m_dragItem;
+    }
     if (selection.isEmpty()) return;
     QRectF rectUnion;
     // Find top left position of selection
@@ -5260,6 +5268,16 @@ void CustomTrackView::clipEnd()
     }
 }
 
+void CustomTrackView::slotAddClipExtraData(const QString &id, const QString &key, const QString &data, QUndoCommand *groupCommand)
+{
+    DocClipBase *base = m_document->clipManager()->getClipById(id);
+    if (!base) return;
+    QMap <QString, QString> extraData = base->analysisData();
+    QString oldData = extraData.value(key);
+    AddExtraDataCommand *command = new AddExtraDataCommand(this, id, key, oldData, data, groupCommand);
+    if (!groupCommand) m_commandStack->push(command);
+}
+
 void CustomTrackView::slotAddClipMarker(const QString &id, CommentedTime newMarker, QUndoCommand *groupCommand)
 {
     CommentedTime oldMarker = m_document->clipManager()->getClipById(id)->markerAt(newMarker.time());
@@ -5423,9 +5441,20 @@ void CustomTrackView::slotLoadClipMarkers(const QString &id)
 void CustomTrackView::addMarker(const QString &id, const CommentedTime marker)
 {
     DocClipBase *base = m_document->clipManager()->getClipById(id);
+    if (base == NULL) return;
     if (marker.markerType() < 0) base->deleteSnapMarker(marker.time());
     else base->addSnapMarker(marker);
     emit updateClipMarkers(base);
+    setDocumentModified();
+    viewport()->update();
+}
+
+void CustomTrackView::addData(const QString &id, const QString &key, const QString &data)
+{
+    DocClipBase *base = m_document->clipManager()->getClipById(id);
+    if (base == NULL) return;
+    base->setAnalysisData(key, data);
+    emit updateClipExtraData(base);
     setDocumentModified();
     viewport()->update();
 }
