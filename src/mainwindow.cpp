@@ -2840,11 +2840,11 @@ void MainWindow::slotAddClipMarker()
         return;
     }
     QString id = clip->getId();
-    CommentedTime marker(pos, i18n("Marker"));
+    CommentedTime marker(pos, i18n("Marker"), KdenliveSettings::default_marker_type());
     QPointer<MarkerDialog> d = new MarkerDialog(clip, marker,
                        m_activeDocument->timecode(), i18n("Add Marker"), this);
     if (d->exec() == QDialog::Accepted)
-        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker().time(), d->newMarker().comment());
+        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker());
     delete d;
 }
 
@@ -2920,20 +2920,20 @@ void MainWindow::slotEditClipMarker()
     }
 
     QString id = clip->getId();
-    QString oldcomment = clip->markerComment(pos);
-    if (oldcomment.isEmpty()) {
+    CommentedTime oldMarker = clip->markerAt(pos);
+    if (oldMarker == CommentedTime()) {
         m_messageLabel->setMessage(i18n("No marker found at cursor time"), ErrorMessage);
         return;
     }
 
-    CommentedTime marker(pos, oldcomment);
-    QPointer<MarkerDialog> d = new MarkerDialog(clip, marker,
+    QPointer<MarkerDialog> d = new MarkerDialog(clip, oldMarker,
                       m_activeDocument->timecode(), i18n("Edit Marker"), this);
     if (d->exec() == QDialog::Accepted) {
-        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker().time(), d->newMarker().comment());
+        m_activeTimeline->projectView()->slotAddClipMarker(id, d->newMarker());
         if (d->newMarker().time() != pos) {
             // remove old marker
-            m_activeTimeline->projectView()->slotAddClipMarker(id, pos, QString());
+            oldMarker.setMarkerType(-1);
+            m_activeTimeline->projectView()->slotAddClipMarker(id, oldMarker);
         }
     }
     delete d;
@@ -2952,8 +2952,9 @@ void MainWindow::slotAddMarkerGuideQuickly()
             m_messageLabel->setMessage(i18n("Cannot find clip to add marker"), ErrorMessage);
             return;
         }
-
-        m_activeTimeline->projectView()->slotAddClipMarker(clip->getId(), pos, m_activeDocument->timecode().getDisplayTimecode(pos, false));
+        //TODO: allow user to set default marker category
+	CommentedTime marker(pos, m_activeDocument->timecode().getDisplayTimecode(pos, false), KdenliveSettings::default_marker_type());
+        m_activeTimeline->projectView()->slotAddClipMarker(clip->getId(), marker);
     } else {
         m_activeTimeline->projectView()->slotAddGuide(false);
     }
@@ -3316,7 +3317,7 @@ void MainWindow::slotShowClipProperties(DocClipBase *clip)
 
     // any type of clip but a title
     ClipProperties *dia = new ClipProperties(clip, m_activeDocument->timecode(), m_activeDocument->fps(), this);
-    connect(dia, SIGNAL(addMarker(const QString &, GenTime, QString)), m_activeTimeline->projectView(), SLOT(slotAddClipMarker(const QString &, GenTime, QString)));
+    connect(dia, SIGNAL(addMarker(const QString &, CommentedTime)), m_activeTimeline->projectView(), SLOT(slotAddClipMarker(const QString &, CommentedTime)));
     connect(m_activeTimeline->projectView(), SIGNAL(updateClipMarkers(DocClipBase *)), dia, SLOT(slotFillMarkersList(DocClipBase *)));
     connect(dia, SIGNAL(loadMarkers(const QString &)), m_activeTimeline->projectView(), SLOT(slotLoadClipMarkers(const QString &)));
     connect(dia, SIGNAL(saveMarkers(const QString &)), m_activeTimeline->projectView(), SLOT(slotSaveClipMarkers(const QString &)));
