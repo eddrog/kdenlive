@@ -404,9 +404,45 @@ void CustomTrackView::slotCheckPositionScrolling()
 
 void CustomTrackView::slotOnPlayheadKeyPressed()
 {
-	QPoint p = mapFromGlobal(QCursor::pos());
-	int mappedXPos = qMax((int)(mapToScene(p).x() + 0.5), 0);
-    seekCursorPos(mappedXPos);
+	// get curser point (screen coord)
+	QPoint ps = QCursor::pos();
+
+#if 0
+	// check if we are in timeline area
+	if (geometry().contains(mapFromGlobal(ps))) {
+	    /* do stuff */
+		QPoint p = mapFromGlobal(ps);
+		int mappedXPos = qMax((int)(mapToScene(p).x() + 0.5), 0);
+		seekCursorPos(mappedXPos);
+	}
+#endif
+
+//	 QRect widgetRect = geometry();
+//	 QRect widgetRectAbs(mapToGlobal(widgetRect.topLeft()), mapToGlobal(widgetRect.bottomRight()));
+//
+//	 if (widgetRectAbs.contains(ps)) {
+//		/* do stuff */
+//		QPoint p = mapFromGlobal(ps);
+//		int mappedXPos = qMax((int)(mapToScene(p).x() + 0.5), 0);
+//		seekCursorPos(mappedXPos);
+//	 }
+
+	QRect wRect(geometry().topLeft(), geometry().bottomRight());
+	wRect.setRect(	wRect.x() - 20,
+					wRect.y() - 20,
+					wRect.width() + 40,
+					wRect.height() + 40);
+
+
+	QRect widgetRectAbs(mapToGlobal(wRect.topLeft()),
+						mapToGlobal(wRect.bottomRight()));
+
+	if (widgetRectAbs.contains(ps)) {
+		/* do stuff */
+		QPoint p = mapFromGlobal(ps);
+		int mappedXPos = qMax((int)(mapToScene(p).x() + 0.5), 0);
+		seekCursorPos(mappedXPos);
+	}
 //    slotCheckPositionScrolling();
 }
 
