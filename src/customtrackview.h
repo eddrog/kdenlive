@@ -234,7 +234,7 @@ public slots:
      * @param id Id of the marker's clip
      * @param t Position of the marker
      * @param c Comment of the marker */
-    void slotAddClipMarker(const QString &id, CommentedTime newMarker, QUndoCommand *groupCommand = 0);
+    void slotAddClipMarker(const QString &id, QList <CommentedTime> newMarker, QUndoCommand *groupCommand = 0);
     void slotLoadClipMarkers(const QString &id);
     void slotSaveClipMarkers(const QString &id);
     bool addGuide(const GenTime &pos, const QString &comment);
@@ -300,6 +300,10 @@ public slots:
     void updateSnapPoints(AbstractClipItem *selected, QList <GenTime> offsetList = QList <GenTime> (), bool skipSelectedItems = false);
     
     void slotAddEffect(ClipItem *clip, QDomElement effect);
+    void slotImportClipKeyframes(GRAPHICSRECTITEM type);
+
+    /** @brief Get effect parameters ready for MLT*/
+    static void adjustEffectParameters(EffectsParameterList &parameters, QDomNodeList params, MltVideoProfile profile, const QString &prefix = QString());
 
     void slotOnPlayheadKeyPressed();
 
@@ -476,9 +480,6 @@ private:
     
     /** @brief Prepare an add clip command for an effect */
     void processEffect(ClipItem *item, QDomElement effect, int offset, QUndoCommand *effectCommand);
-    
-    /** @brief Get effect parameters ready for MLT*/
-    void adjustEffectParameters(EffectsParameterList &parameters, QDomNodeList params, const QString &prefix = QString());
 
 private slots:
     void slotRefreshGuides();
@@ -496,7 +497,7 @@ private slots:
      *  @param resetThumbs Should we recreate the timeline thumbnails. */
     void slotRefreshThumbs(const QString &id, bool resetThumbs);
     /** @brief A Filter job producer results. */
-    void slotGotFilterJobResults(const QString &id, int startPos, int track, const QString &filter, stringMap filterParams);
+    void slotGotFilterJobResults(const QString &id, int startPos, int track, const QString &filter, stringMap filterParams, QStringList extra);
 
 
 signals:
@@ -527,6 +528,8 @@ signals:
     void updateTrackEffectState(int);
     /** @brief Cursor position changed, repaint ruler.*/
     void updateRuler();
+    /** @brief Send data from a clip to be imported as keyframes for effect / transition.*/
+    void importKeyframes(GRAPHICSRECTITEM type, const QString&);
 };
 
 #endif

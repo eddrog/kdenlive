@@ -43,6 +43,7 @@
 #include "projectlist.h"
 #include "mainwindow.h"
 #include "parametercontainer.h"
+#include "../customtrackview.h"
 
 #include <KUrlRequester>
 #include <KFileDialog>
@@ -226,6 +227,7 @@ ParameterContainer::ParameterContainer(QDomElement effect, ItemInfo info, Effect
                 m_vbox->addWidget(m_geometryWidget);
                 m_valueItems[paramName+"geometry"] = m_geometryWidget;
                 connect(m_geometryWidget, SIGNAL(seekToPos(int)), this, SIGNAL(seekTimeline(int)));
+		connect(m_geometryWidget, SIGNAL(importClipKeyframes()), this, SIGNAL(importClipKeyframes()));
                 connect(this, SIGNAL(syncEffectsPos(int)), m_geometryWidget, SLOT(slotSyncPosition(int)));
             } else {
                 Geometryval *geo = new Geometryval(m_metaInfo->profile, m_metaInfo->timecode, m_metaInfo->frameSize, 0);
@@ -807,19 +809,20 @@ void ParameterContainer::slotStartFilterJobAction()
         QDomElement pa = namenode.item(i).toElement();
         QString type = pa.attribute("type");
         if (type == "filterjob") {
-	    QString filtertag = pa.attribute("filtertag");
-	    if (filtertag.contains("%geometry")) {
+	    QString filterparams = pa.attribute("filterparams");
+	    if (filterparams.contains("%params")) {
 		// Replace with current geometry
-		if (m_geometryWidget) {
-		    QString data = m_geometryWidget->getValue();
-		    filtertag.replace("%geometry", data);
-		    kDebug()<<"// Setting geometry: "<<data<<", RES: "<<filtertag;
-		}
+		EffectsParameterList parameters;
+		QDomNodeList params = m_effect.elementsByTagName("parameter");
+		CustomTrackView::adjustEffectParameters(parameters, params, m_metaInfo->profile);
+		QString paramData;
+		for (int j = 0; j < parameters.count(); j++)
+		    paramData.append(parameters.at(j).name()+"="+parameters.at(j).value()+" ");
+		filterparams.replace("%params", paramData);
 	    }
-	    QStringList extra;
-	    extra = pa.attribute("extraparams").split(' ', QString::SkipEmptyParts);
-            emit startFilterJob(filtertag, pa.attribute("filterparams"), pa.attribute("finalfilter"), pa.attribute("consumer"), pa.attribute("consumerparams"), pa.attribute("wantedproperties"), extra);
-            kDebug()<<" - - -PROPS:\n"<<"filtertag"<<"-"<< pa.attribute("filterparams")<<"-"<< pa.attribute("consumer")<<"-"<< pa.attribute("consumerparams")<<"-"<< pa.attribute("wantedproperties");
+	    QStringList extra = pa.attribute("extraparams").split(' ', QString::SkipEmptyParts);
+            emit startFilterJob(pa.attribute("filtertag"), filterparams, pa.attribute("finalfilter"), pa.attribute("consumer"), pa.attribute("consumerparams"), extra);
+            kDebug()<<" - - -PROPS:\n"<<pa.attribute("filtertag")<<"-"<< filterparams<<"-"<< pa.attribute("consumer")<<"-"<< pa.attribute("consumerparams")<<"-"<< pa.attribute("extraparams");
             break;
         }
     }
@@ -845,3 +848,14 @@ bool ParameterContainer::needsMonitorEffectScene() const
 {
     return m_needsMonitorEffectScene;
 }
+
+void ParameterContainer::setKeyframes(const QString &data)
+{
+    if (!m_geometryWidget) {
+	kDebug()<<" / / NO GEOMETRY WIDGET FOUND FOR IMPORTING DATA";
+	return;
+    }
+    m_geometryWidget->importKeyframes(data);
+    
+}
+
