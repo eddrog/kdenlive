@@ -271,7 +271,7 @@ void EffectStackView2::connectEffect(CollapsibleEffect *currentEffect)
     // Check drag & drop
     currentEffect->installEventFilter( this );
     connect(currentEffect, SIGNAL(parameterChanged(const QDomElement, const QDomElement, int)), this , SLOT(slotUpdateEffectParams(const QDomElement, const QDomElement, int)));
-    connect(currentEffect, SIGNAL(startFilterJob(QString,QString,QString,QString,QString,QString)), this , SLOT(slotStartFilterJob(QString,QString,QString,QString,QString,QString)));
+    connect(currentEffect, SIGNAL(startFilterJob(QString,QString,QString,QString,const QMap <QString, QString>)), this , SLOT(slotStartFilterJob(QString,QString,QString,QString,const QMap <QString, QString>)));
     connect(currentEffect, SIGNAL(deleteEffect(const QDomElement)), this , SLOT(slotDeleteEffect(const QDomElement)));
     connect(currentEffect, SIGNAL(reloadEffects()), this , SIGNAL(reloadEffects()));
     connect(currentEffect, SIGNAL(resetEffect(int)), this , SLOT(slotResetEffect(int)));
@@ -284,6 +284,7 @@ void EffectStackView2::connectEffect(CollapsibleEffect *currentEffect)
     connect(currentEffect, SIGNAL(addEffect(QDomElement)), this , SLOT(slotAddEffect(QDomElement)));
     connect(currentEffect, SIGNAL(createRegion(int,KUrl)), this, SLOT(slotCreateRegion(int,KUrl)));
     connect(currentEffect, SIGNAL(deleteGroup(QDomDocument)), this , SLOT(slotDeleteGroup(QDomDocument)));
+    connect(currentEffect, SIGNAL(importClipKeyframes()), this, SIGNAL(importClipKeyframes()));
 }
 
 void EffectStackView2::slotCheckWheelEventFilter()
@@ -643,10 +644,10 @@ void EffectStackView2::slotMoveEffectUp(QList <int> indexes, bool up)
     else emit changeEffectPosition(m_clipref, -1, indexes, endPos);
 }
 
-void EffectStackView2::slotStartFilterJob(const QString&filterName, const QString&filterParams, const QString&finalFilterName, const QString&consumer, const QString&consumerParams, const QString&properties)
+void EffectStackView2::slotStartFilterJob(const QString&filterName, const QString&filterParams, const QString&consumer, const QString&consumerParams, const QMap <QString, QString> &extraParams)
 {
     if (!m_clipref) return;
-    emit startFilterJob(m_clipref->info(), m_clipref->clipProducer(), filterName, filterParams, finalFilterName, consumer, consumerParams, properties);
+    emit startFilterJob(m_clipref->info(), m_clipref->clipProducer(), filterName, filterParams, consumer, consumerParams, extraParams);
 }
 
 void EffectStackView2::slotResetEffect(int ix)

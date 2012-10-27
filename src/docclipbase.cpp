@@ -41,7 +41,8 @@
 
 DocClipBase::DocClipBase(ClipManager *clipManager, QDomElement xml, const QString &id) :
         QObject(),
-        m_audioFrameCache(),
+        lastSeekPosition(0),
+        audioFrameCache(),
         m_refcount(0),
         m_baseTrackProducers(),
         m_videoTrackProducers(),
@@ -71,6 +72,12 @@ DocClipBase::DocClipBase(ClipManager *clipManager, QDomElement xml, const QStrin
             QString z = cuts.at(i);
             addCutZone(z.section('-', 0, 0).toInt(), z.section('-', 1, 1).toInt(), z.section('-', 2, 2));
         }
+    }
+
+    if (xml.hasAttribute("analysisdata")) {
+	QStringList adata = xml.attribute("analysisdata").split('#', QString::SkipEmptyParts);
+	for (int i = 0; i < adata.count(); i++)
+	    m_analysisdata.insert(adata.at(i).section('?', 0, 0), adata.at(i).section('?', 1, 1));
     }
 
     KUrl url = KUrl(xml.attribute("resource"));
@@ -131,7 +138,7 @@ bool DocClipBase::hasAudioThumb() const
 
 void DocClipBase::slotClearAudioCache()
 {
-    m_audioFrameCache.clear();
+    audioFrameCache.clear();
     m_audioThumbCreated = false;
 }
 
@@ -255,6 +262,16 @@ QDomElement DocClipBase::toXML(bool hideTemporaryProperties) const
         }
         clip.setAttribute("cutzones", cuts.join(";"));
     }
+    QString adata;
+    if (!m_analysisdata.isEmpty()) {
+	QMapIterator<QString, QString> i(m_analysisdata);
+	while (i.hasNext()) {
+	    i.next();
+	    //WARNING: a ? and # separator is not a good idea
+	    adata.append(i.key() + "?" + i.value() + "#");
+	}
+    }
+    clip.setAttribute("analysisdata", adata);
     //kDebug() << "/// CLIP XML: " << doc.toString();
     return doc.documentElement();
 }
@@ -268,7 +285,7 @@ void DocClipBase::setAudioThumbCreated(bool isDone)
 void DocClipBase::updateAudioThumbnail(const audioByteArray& data)
 {
     //kDebug() << "CLIPBASE RECIEDVED AUDIO DATA*********************************************";
-    m_audioFrameCache = data;
+    audioFrameCache = data;
     m_audioThumbCreated = true;
     emit gotAudioData();
 }
@@ -1259,4 +1276,25 @@ QImage DocClipBase::extractImage(int frame, int width, int height)
     return m_thumbProd->extractImage(frame, width, height);
 }
 
+void DocClipBase::setAnalysisData(const QString &name, const QString &data)
+{
+    if (data.isEmpty()) m_analysisdata.remove(name);
+    else {
+	if (m_analysisdata.contains(name)) {
+	    int i = 1;
+	    QString newname = name + " " + QString::number(i);
+	    while (m_analysisdata.contains(newname)) {
+		i++;
+		newname = name + " " + QString::number(i);
+	    }
+	    m_analysisdata.insert(newname, data);
+	}
+	else m_analysisdata.insert(name, data);
+    }
+}
+
+QMap <QString, QString> DocClipBase::analysisData() const
+{
+    return m_analysisdata;
+}
 

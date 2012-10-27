@@ -66,6 +66,8 @@ public:
     void updateParameter(const QString &key, const QString &value);
     /** @brief Returns true of this effect requires an on monitor adjustable effect scene. */
     bool needsMonitorEffectScene() const;
+    /** @brief Set keyframes for this param. */
+    void setKeyframes(const QString &data);
 
 private slots:
     void slotCollectAllParameters();
@@ -102,8 +104,9 @@ signals:
     void seekTimeline(int);
     void showComments(bool);    
     /** @brief Start an MLT filter job on this clip. */
-    void startFilterJob(QString filterName, QString filterParams, QString finalFilterName, QString consumer, QString consumerParams, QString properties);
-    
+    void startFilterJob(QString filterName, QString filterParams, QString consumer, QString consumerParams, const QMap <QString, QString>extra);
+    /** @brief Request import of keyframes from clip data. */
+    void importClipKeyframes();
 };
 
 #endif

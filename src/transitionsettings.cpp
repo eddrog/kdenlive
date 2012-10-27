@@ -1,5 +1,5 @@
 /***************************************************************************
-                          effecstackedit.h  -  description
+                          effecstackedit.cpp  -  description
                              -------------------
     begin                : Mar 15 2008
     copyright            : (C) 2008 by Marco Gittler
@@ -41,6 +41,8 @@ TransitionSettings::TransitionSettings(Monitor *monitor, QWidget* parent) :
     vbox1->addWidget(m_effectEdit);
     frame->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum));
     connect(m_effectEdit, SIGNAL(seekTimeline(int)), this, SLOT(slotSeekTimeline(int)));
+    connect(m_effectEdit, SIGNAL(importClipKeyframes()), this, SIGNAL(importClipKeyframes()));
+    
     setEnabled(false);
 
     QList<QStringList> transitionsList;
@@ -108,9 +110,12 @@ void TransitionSettings::slotTransitionChanged(bool reinit, bool updateCurrent)
     QDomElement e = m_usedTransition->toXML().cloneNode().toElement();
     if (reinit) {
         // Reset the transition parameters to the default one
+        disconnect(m_effectEdit->monitor(), SIGNAL(renderPosition(int)), this, SLOT(slotRenderPos(int)));
         QDomElement newTransition = MainWindow::transitions.getEffectByName(transitionList->currentText()).cloneNode().toElement();
         slotUpdateEffectParams(e, newTransition);
         m_effectEdit->transferParamDesc(newTransition, m_usedTransition->info(), false);
+	if (m_effectEdit->needsMonitorEffectScene())
+	    connect(m_effectEdit->monitor(), SIGNAL(renderPosition(int)), this, SLOT(slotRenderPos(int)));
     } else if (!updateCurrent) {
         // Transition changed, update parameters dialog
         //slotUpdateEffectParams(e, e);
@@ -241,5 +246,9 @@ void TransitionSettings::slotCheckMonitorPosition(int renderPos)
     }
 }
 
+void TransitionSettings::setKeyframes(const QString data)
+{
+    m_effectEdit->setKeyframes(data);
+}
 
 #include "transitionsettings.moc"

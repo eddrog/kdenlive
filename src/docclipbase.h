@@ -165,10 +165,6 @@ Q_OBJECT public:
     /** Returns the thumbnail producer used by this clip */
     KThumb *thumbProducer();
 
-    /** Cache for every audio Frame with 10 Bytes */
-    /** format is frame -> channel ->bytes */
-    QMap<int, QMap<int, QByteArray> > m_audioFrameCache;
-
     /** Free cache data */
     void slotClearAudioCache();
     QString getClipHash() const;
@@ -204,9 +200,14 @@ Q_OBJECT public:
     void cleanupProducers();
     bool isClean() const;
     bool getAudioThumbs();
+    void setAnalysisData(const QString &name, const QString &data);
+    QMap <QString, QString> analysisData() const;
+    int lastSeekPosition;
+    /** Cache for every audio Frame with 10 Bytes */
+    /** format is frame -> channel ->bytes */
+    QMap<int, QMap<int, QByteArray> > audioFrameCache;
 
 private:   // Private attributes
-
     /** The number of times this clip is used in the project - the number of references to this clip
      * that exist. */
     uint m_refcount;
@@ -236,6 +237,8 @@ private:   // Private attributes
     QMap <QString, QString> m_properties;
     /** Holds clip metadata like author, copyright,... */
     QMap <QString, QString> m_metadata;
+    /** Holds clip analysis data that can be used later to create markers or keyframes */
+    QMap <QString, QString> m_analysisdata;
     
     /** Try to make sure we don't delete a producer while using it */
     QMutex m_producerMutex;

@@ -26,6 +26,7 @@
 #include "commands/movetransitioncommand.h"
 #include "commands/resizeclipcommand.h"
 #include "commands/editguidecommand.h"
+#include "commands/addextradatacommand.h"
 #include "commands/addtimelineclipcommand.h"
 #include "commands/addeffectcommand.h"
 #include "commands/editeffectcommand.h"
@@ -51,6 +52,7 @@
 #include "commands/changeeffectstatecommand.h"
 #include "commands/movegroupcommand.h"
 #include "ui_addtrack_ui.h"
+#include "ui_importkeyframesdialog_ui.h"
 #include "initeffects.h"
 #include "commands/locktrackcommand.h"
 #include "commands/groupclipscommand.h"
@@ -416,7 +418,7 @@ void CustomTrackView::mouseMoveEvent(QMouseEvent * event)
     if (dragMode() == QGraphicsView::RubberBandDrag || (event->modifiers() == Qt::ControlModifier && m_tool != SPACERTOOL && m_operationMode != RESIZESTART && m_operationMode != RESIZEEND)) {
         event->setAccepted(true);
         m_moveOpMode = NONE;
-        QGraphicsView::mouseMoveEvent(event);
+        if (event->modifiers() != Qt::ControlModifier || dragMode() == QGraphicsView::RubberBandDrag) QGraphicsView::mouseMoveEvent(event);
         return;
     }
 
@@ -739,6 +741,10 @@ void CustomTrackView::mousePressEvent(QMouseEvent * event)
         setDragMode(QGraphicsView::RubberBandDrag);
         if (!(event->modifiers() & Qt::ControlModifier)) {
             resetSelectionGroup();
+	    if (m_dragItem) {
+		emit clipItemSelected(NULL);
+		m_dragItem = NULL;
+	    }
             scene()->clearSelection();
         }
         m_blockRefresh = false;
@@ -1213,6 +1219,9 @@ void CustomTrackView::groupSelectedItems(bool force, bool createNewGroup)
         return;
     }
     QList<QGraphicsItem *> selection = m_scene->selectedItems();
+    if (m_dragItem && !selection.contains(m_dragItem)) {
+	selection << m_dragItem;
+    }
     if (selection.isEmpty()) return;
     QRectF rectUnion;
     // Find top left position of selection
@@ -2675,7 +2684,7 @@ void CustomTrackView::dropEvent(QDropEvent * event)
             groupSelectedItems(true);
         } else if (items.count() == 1) {
             m_dragItem = static_cast <AbstractClipItem *>(items.at(0));
-            emit clipItemSelected((ClipItem*)m_dragItem, false);
+            emit clipItemSelected((ClipItem*) m_dragItem, false);
         }
         event->setDropAction(Qt::MoveAction);
         event->accept();
@@ -5251,15 +5260,41 @@ void CustomTrackView::clipEnd()
     }
 }
 
-void CustomTrackView::slotAddClipMarker(const QString &id, CommentedTime newMarker, QUndoCommand *groupCommand)
+void CustomTrackView::slotAddClipExtraData(const QString &id, const QString &key, const QString &data, QUndoCommand *groupCommand)
 {
-    CommentedTime oldMarker = m_document->clipManager()->getClipById(id)->markerAt(newMarker.time());
-    if (oldMarker == CommentedTime()) {
-	oldMarker = newMarker;
-	oldMarker.setMarkerType(-1);
-    }
-    AddMarkerCommand *command = new AddMarkerCommand(this, oldMarker, newMarker, id, groupCommand);
+    DocClipBase *base = m_document->clipManager()->getClipById(id);
+    if (!base) return;
+    QMap <QString, QString> extraData = base->analysisData();
+    QString oldData = extraData.value(key);
+    AddExtraDataCommand *command = new AddExtraDataCommand(this, id, key, oldData, data, groupCommand);
     if (!groupCommand) m_commandStack->push(command);
+}
+
+void CustomTrackView::slotAddClipMarker(const QString &id, QList <CommentedTime> newMarkers, QUndoCommand *groupCommand)
+{
+    QUndoCommand *subCommand = NULL;
+    if (newMarkers.count() > 1 && groupCommand == NULL) {
+	subCommand = new QUndoCommand;
+	subCommand->setText("Add markers");
+    }
+    for (int i = 0; i < newMarkers.count(); i++) {
+	CommentedTime oldMarker = m_document->clipManager()->getClipById(id)->markerAt(newMarkers.at(i).time());
+	if (oldMarker == CommentedTime()) {
+	    oldMarker = newMarkers.at(i);
+	    oldMarker.setMarkerType(-1);
+	}
+	if (newMarkers.count() == 1 && !groupCommand) {
+	    AddMarkerCommand *command = new AddMarkerCommand(this, oldMarker, newMarkers.at(i), id, groupCommand);
+	    m_commandStack->push(command);
+	}
+	else if (groupCommand) {
+	    (void) new AddMarkerCommand(this, oldMarker, newMarkers.at(i), id, groupCommand);
+	}
+	else {
+	    (void) new AddMarkerCommand(this, oldMarker, newMarkers.at(i), id, subCommand);
+	}
+    }
+    if (subCommand) m_commandStack->push(subCommand);
 }
 
 void CustomTrackView::slotDeleteClipMarker(const QString &comment, const QString &id, const GenTime &position)
@@ -5370,6 +5405,7 @@ void CustomTrackView::slotLoadClipMarkers(const QString &id)
     QUndoCommand *command = new QUndoCommand();
     command->setText("Load markers");
     QString markerText;
+    QList <CommentedTime> markersList;
     foreach(QString line, lines) {
 	markerText.clear();
 	values = line.split("\t", QString::SkipEmptyParts);
@@ -5400,13 +5436,14 @@ void CustomTrackView::slotLoadClipMarkers(const QString &id)
 	    // Marker found, add it
 	    //TODO: allow user to set a marker category
 	    CommentedTime marker1(GenTime(time1), markerText, category);
-	    slotAddClipMarker(id, marker1, command);
+	    markersList << marker1;
 	    if (time2 > 0 && time2 != time1) {
 		CommentedTime marker2(GenTime(time2), markerText, category);
-		slotAddClipMarker(id, marker2, command);
+		markersList << marker2;
 	    }
 	}
     }
+    if (!markersList.isEmpty()) slotAddClipMarker(id, markersList, command);
     if (command->childCount() > 0) m_commandStack->push(command);
     else delete command;
 }
@@ -5414,9 +5451,20 @@ void CustomTrackView::slotLoadClipMarkers(const QString &id)
 void CustomTrackView::addMarker(const QString &id, const CommentedTime marker)
 {
     DocClipBase *base = m_document->clipManager()->getClipById(id);
+    if (base == NULL) return;
     if (marker.markerType() < 0) base->deleteSnapMarker(marker.time());
     else base->addSnapMarker(marker);
     emit updateClipMarkers(base);
+    setDocumentModified();
+    viewport()->update();
+}
+
+void CustomTrackView::addData(const QString &id, const QString &key, const QString &data)
+{
+    DocClipBase *base = m_document->clipManager()->getClipById(id);
+    if (base == NULL) return;
+    base->setAnalysisData(key, data);
+    emit updateClipExtraData(base);
     setDocumentModified();
     viewport()->update();
 }
@@ -7271,18 +7319,18 @@ EffectsParameterList CustomTrackView::getEffectArgs(const QDomElement &effect)
 	    parameters.addParam(QString("filter%1.tag").arg(subeffectix), subeffect.attribute("tag"));
 	    parameters.addParam(QString("filter%1.kdenlive_info").arg(subeffectix), subeffect.attribute("kdenlive_info"));
 	    QDomNodeList subparams = subeffect.elementsByTagName("parameter");
-	    adjustEffectParameters(parameters, subparams, QString("filter%1.").arg(subeffectix));
+	    adjustEffectParameters(parameters, subparams, m_document->mltProfile(), QString("filter%1.").arg(subeffectix));
 	}
     }
 
     QDomNodeList params = effect.elementsByTagName("parameter");
-    adjustEffectParameters(parameters, params);
+    adjustEffectParameters(parameters, params, m_document->mltProfile());
     
     return parameters;
 }
 
 
-void CustomTrackView::adjustEffectParameters(EffectsParameterList &parameters, QDomNodeList params, const QString &prefix)
+void CustomTrackView::adjustEffectParameters(EffectsParameterList &parameters, QDomNodeList params, MltVideoProfile profile, const QString &prefix)
 {
   QLocale locale;
   for (int i = 0; i < params.count(); i++) {
@@ -7333,7 +7381,7 @@ void CustomTrackView::adjustEffectParameters(EffectsParameterList &parameters, Q
             if (e.attribute("factor", "1") != "1" || e.attribute("offset", "0") != "0") {
                 double fact;
                 if (e.attribute("factor").contains('%')) {
-                    fact = ProfilesDialog::getStringEval(m_document->mltProfile(), e.attribute("factor"));
+                    fact = ProfilesDialog::getStringEval(profile, e.attribute("factor"));
                 } else {
                     fact = e.attribute("factor", "1").toDouble();
                 }
@@ -7443,16 +7491,16 @@ void CustomTrackView::adjustEffects(ClipItem* item, ItemInfo oldInfo, QUndoComma
 }
 
 
-void CustomTrackView::slotGotFilterJobResults(const QString &/*id*/, int startPos, int track, const QString &filter, stringMap filterParams)
+void CustomTrackView::slotGotFilterJobResults(const QString &/*id*/, int startPos, int track, stringMap filterParams, stringMap extra)
 {
     ClipItem *clip = getClipItemAt(GenTime(startPos, m_document->fps()), track);
     if (clip == NULL) {
-        emit displayMessage(i18n("Cannot find clip for effect update %1.", filter), ErrorMessage);
+        emit displayMessage(i18n("Cannot find clip for effect update %1.", extra.value("finalfilter")), ErrorMessage);
         return;
     }
     QDomElement newEffect;
     QDomElement effect = clip->getEffectAtIndex(clip->selectedEffectIndex());
-    if (effect.attribute("id") == filter) {
+    if (effect.attribute("id") == extra.value("finalfilter")) {
         newEffect = effect.cloneNode().toElement();
         QMap<QString, QString>::const_iterator i = filterParams.constBegin();
         while (i != filterParams.constEnd()) {
@@ -7466,4 +7514,74 @@ void CustomTrackView::slotGotFilterJobResults(const QString &/*id*/, int startPo
     }    
 }
 
+
+void CustomTrackView::slotImportClipKeyframes(GRAPHICSRECTITEM type)
+{
+    if (!m_selectionGroup) {
+	emit displayMessage(i18n("You need to select one clip and one transition"), ErrorMessage);
+	return;
+    }
+    // Make sure there is no collision
+    QList<QGraphicsItem *> children = m_selectionGroup->childItems();
+    ClipItem *item = NULL;
+    for (int i = 0; i < children.count(); i++) {
+	if (children.at(i)->type() == AVWIDGET) {
+            item = (ClipItem*) children.at(i);
+            break;
+        }
+    }
+    if (!item) {
+	emit displayMessage(i18n("No clip found"), ErrorMessage);
+	return;
+    }
+    QMap <QString, QString> data = item->baseClip()->analysisData();
+    if (data.isEmpty()) {
+	emit displayMessage(i18n("No keyframe data found in clip"), ErrorMessage);
+	return;
+    }
+    QPointer<QDialog> d = new QDialog(this);
+    Ui::ImportKeyframesDialog_UI ui;
+    ui.setupUi(d);
+
+    // Set  up data
+    int ix = 0;
+    QMap<QString, QString>::const_iterator i = data.constBegin();
+    while (i != data.constEnd()) {
+	ui.data_list->insertItem(ix, i.key());
+	ui.data_list->setItemData(ix, i.value(), Qt::UserRole);
+	++i;
+	ix++;
+    }
+
+    if (d->exec() != QDialog::Accepted) {
+	delete d;
+	return;
+    }
+    QString keyframeData = ui.data_list->itemData(ui.data_list->currentIndex()).toString();
+    QStringList keyframeList = keyframeData.split(';', QString::SkipEmptyParts);
+    QString result;
+    if (ui.import_position->isChecked()) {
+	if (ui.import_size->isChecked()) {
+	    foreach(QString key, keyframeList) {
+		if (key.count(':') > 1) result.append(key.section(':', 0, 1));
+		else result.append(key);
+		result.append(';');
+	    }
+	}
+	else {
+	    foreach(QString key, keyframeList) {
+		result.append(key.section(':', 0, 0));
+		result.append(';');
+	    }
+	}
+    }
+    else if (ui.import_size->isChecked()) {
+	foreach(QString key, keyframeList) {
+	    result.append(key.section(':', 1, 1));
+	    result.append(';');
+	}
+    }
+    emit importKeyframes(type, result);
+    delete d;
+}
 

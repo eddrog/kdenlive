@@ -435,21 +435,8 @@ ClipProperties::ClipProperties(DocClipBase *clip, Timecode tc, double fps, QWidg
         if (props.contains("colorspace"))
             new QTreeWidgetItem(m_view.clip_vproperties, QStringList() << i18n("Colorspace") << ProfilesDialog::getColorspaceDescription(props.value("colorspace").toInt()));
         
-
-        int width = 180.0 * KdenliveSettings::project_display_ratio();
-        if (width % 2 == 1) width++;
-        QPixmap pix = m_clip->thumbProducer()->getImage(url, m_clip->getClipThumbFrame(), width, 180);
-	QPixmap framedPix(pix.width(), pix.height());
-	framedPix.fill(Qt::transparent);
-	QPainter p(&framedPix);
-	p.setRenderHint(QPainter::Antialiasing, true);
-	QPainterPath path;
-	path.addRoundedRect(0.5, 0.5, framedPix.width() - 1, framedPix.height() - 1, 4, 4);
-	p.setClipPath(path);
-	p.drawPixmap(0, 0, pix);
-	p.end();
-	
-        m_view.clip_thumb->setPixmap(framedPix);
+	m_view.clip_thumb->setMinimumSize(180 * KdenliveSettings::project_display_ratio(), 180);
+        
         if (t == IMAGE || t == VIDEO || t == PLAYLIST) m_view.tabWidget->removeTab(AUDIOTAB);
     } else {
         m_view.tabWidget->removeTab(IMAGETAB);
@@ -485,6 +472,12 @@ ClipProperties::ClipProperties(DocClipBase *clip, Timecode tc, double fps, QWidg
     m_view.marker_save->setToolTip(i18n("Save markers"));
     m_view.marker_load->setIcon(KIcon("document-open"));
     m_view.marker_load->setToolTip(i18n("Load markers"));
+    m_view.analysis_delete->setIcon(KIcon("trash-empty"));
+    m_view.analysis_delete->setToolTip(i18n("Delete analysis data"));
+    m_view.analysis_load->setIcon(KIcon("document-open"));
+    m_view.analysis_load->setToolTip(i18n("Load analysis data"));
+    m_view.analysis_save->setIcon(KIcon("document-save-as"));
+    m_view.analysis_save->setToolTip(i18n("Save analysis data"));
 
         // Check for Nepomuk metadata
 #ifdef USE_NEPOMUK
@@ -512,13 +505,19 @@ ClipProperties::ClipProperties(DocClipBase *clip, Timecode tc, double fps, QWidg
 #endif
     
     slotFillMarkersList(m_clip);
+    slotUpdateAnalysisData(m_clip);
+    
     connect(m_view.marker_new, SIGNAL(clicked()), this, SLOT(slotAddMarker()));
     connect(m_view.marker_edit, SIGNAL(clicked()), this, SLOT(slotEditMarker()));
     connect(m_view.marker_delete, SIGNAL(clicked()), this, SLOT(slotDeleteMarker()));
     connect(m_view.marker_save, SIGNAL(clicked()), this, SLOT(slotSaveMarkers()));
     connect(m_view.marker_load, SIGNAL(clicked()), this, SLOT(slotLoadMarkers()));
     connect(m_view.markers_list, SIGNAL(doubleClicked(const QModelIndex &)), this, SLOT(slotEditMarker()));
-
+    
+    connect(m_view.analysis_delete, SIGNAL(clicked()), this, SLOT(slotDeleteAnalysis()));
+    connect(m_view.analysis_save, SIGNAL(clicked()), this, SLOT(slotSaveAnalysis()));
+    connect(m_view.analysis_load, SIGNAL(clicked()), this, SLOT(slotLoadAnalysis()));
+    
     connect(this, SIGNAL(accepted()), this, SLOT(slotApplyProperties()));
     connect(m_view.buttonBox->button(QDialogButtonBox::Apply), SIGNAL(clicked()), this, SLOT(slotApplyProperties()));
     m_view.buttonBox->button(QDialogButtonBox::Apply)->setEnabled(false);
@@ -676,6 +675,21 @@ ClipProperties::~ClipProperties()
     if (del2) delete del2;
 }
 
+void ClipProperties::slotGotThumbnail(const QString &id, QImage img)
+{
+    if (id != m_clip->getId()) return;
+    QPixmap framedPix(img.width(), img.height());
+    framedPix.fill(Qt::transparent);
+    QPainter p(&framedPix);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    QPainterPath path;
+    path.addRoundedRect(0.5, 0.5, framedPix.width() - 1, framedPix.height() - 1, 4, 4);
+    p.setClipPath(path);
+    p.drawImage(0, 0, img);
+    p.end();
+    m_view.clip_thumb->setPixmap(framedPix);
+}
+
 void ClipProperties::slotApplyProperties()
 {
     if (m_clip != NULL) {
@@ -724,6 +738,21 @@ void ClipProperties::slotEnableLumaFile(int state)
     m_view.label_softness->setEnabled(enable);
 }
 
+void ClipProperties::slotUpdateAnalysisData(DocClipBase *clip)
+{
+    if (m_clip != clip) return;
+    m_view.analysis_list->clear();
+    QMap <QString, QString> analysis = clip->analysisData();
+    m_view.analysis_box->setHidden(analysis.isEmpty());
+    QMap<QString, QString>::const_iterator i = analysis.constBegin();
+    while (i != analysis.constEnd()) {
+	QStringList itemtext;
+	itemtext << i.key() << i.value();
+	(void) new QTreeWidgetItem(m_view.analysis_list, itemtext);
+	++i;
+    }
+}
+
 void ClipProperties::slotFillMarkersList(DocClipBase *clip)
 {
     if (m_clip != clip) return;
@@ -744,7 +773,9 @@ void ClipProperties::slotAddMarker()
     QPointer<MarkerDialog> d = new MarkerDialog(m_clip, marker,
                                           m_tc, i18n("Add Marker"), this);
     if (d->exec() == QDialog::Accepted) {
-        emit addMarker(m_clip->getId(), d->newMarker());
+	QList <CommentedTime> markers;
+	markers << d->newMarker();
+        emit addMarkers(m_clip->getId(), markers);
     }
     delete d;
 }
@@ -766,7 +797,9 @@ void ClipProperties::slotEditMarker()
     if (pos < 0 || pos > marks.count() - 1) return;
     MarkerDialog d(m_clip, marks.at(pos), m_tc, i18n("Edit Marker"), this);
     if (d.exec() == QDialog::Accepted) {
-        emit addMarker(m_clip->getId(), d.newMarker());
+	QList <CommentedTime> markers;
+	markers << d.newMarker();
+        emit addMarkers(m_clip->getId(), markers);
     }
 }
 
@@ -781,8 +814,13 @@ void ClipProperties::slotDeleteMarker()
 	    toDelete << marker;
 	}
     }
-    for (int i = 0; i < toDelete.count(); i++)
-	emit addMarker(m_clip->getId(), toDelete.at(i));
+    emit addMarkers(m_clip->getId(), toDelete);
+}
+
+void ClipProperties::slotDeleteAnalysis()
+{
+    QTreeWidgetItem *current = m_view.analysis_list->currentItem();
+    if (current) emit deleteAnalysis(m_clip->getId(), current->text(0));
 }
 
 const QString &ClipProperties::clipId() const
