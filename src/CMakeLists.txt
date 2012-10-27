@@ -146,6 +146,7 @@ list(APPEND kdenlive_SRCS
   guide.cpp
   headertrack.cpp
   initeffects.cpp
+  jackslave.cpp
   kdenlivedoc.cpp
   kdenlivesettingsdialog.cpp
   keyframeedit.cpp

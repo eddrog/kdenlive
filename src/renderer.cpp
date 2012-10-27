@@ -34,6 +34,10 @@
 #include "blackmagic/devices.h"
 #endif
 
+#ifdef USE_JACK
+#include "jackslave.h"
+#endif
+
 #include <mlt++/Mlt.h>
 
 #include <KDebug>
@@ -4753,7 +4757,9 @@ void Render::mltConnectJack()
 	if (!m_mltConsumer->is_stopped())
 			m_mltConsumer->stop();
 
+    JackSlave::singleton(m_mltProfile);
 
+#if 0
 	if (m_isJackActive == false) {
 		// create jackrack filter using the factory
 		m_mltFilterJack = new Mlt::Filter(*m_mltProfile, "jackrack", NULL);
@@ -4795,6 +4801,8 @@ void Render::mltConnectJack()
 			m_mltFilterJack = NULL;
 		}
 	}
+#endif
+
 }
 
 void Render::mltDisconnectJack()
