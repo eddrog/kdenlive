@@ -31,14 +31,22 @@ class JackSlave : public QObject
 public:
     static JackSlave& singleton(Mlt::Profile * profile = 0);
 	virtual ~JackSlave();
+	bool isConnected();
+	Mlt::Filter * getFilter();
+	void connect();
+	void disconnect();
 
 protected:
 	JackSlave(Mlt::Profile * profile);
 
 private:
-	bool m_isJackActive;
+	bool m_isConnected;
     Mlt::Filter *m_mltFilterJack;
     Mlt::Profile *m_mltProfile;
+
+    static void onJackStartedProxy(mlt_properties owner, mlt_consumer consumer, mlt_position *position);
+    static void onJackStoppedProxy(mlt_properties owner, mlt_consumer consumer, mlt_position *position);
+
 };
 
 #define JACKSLAVE JackSlave::singleton()

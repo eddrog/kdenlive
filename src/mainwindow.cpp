@@ -4595,24 +4595,24 @@ void MainWindow::slotConnectJack()
 		if ( rp != NULL)
 		{
 			setenv("JACK_NAME_PRJ", "KdlivePrjMon", 1);
-			rp->mltConnectJack();
+			rp->connectSlave();
 			unsetenv("JACK_NAME_PRJ");
 			kDebug() << "Project monitor connected to jack" << "\n";
 		}
 	}
 
-	if (m_clipMonitor != NULL)	{
-		rc = m_clipMonitor->render;
-
-		if ( rc != NULL )
-		{
-			rc->setJackFilter(rp->getJackFilter());
-//			setenv("JACK_NAME_CLIP", "KdliveClipMon", 1);
-//			rc->mltConnectJack();
-//			unsetenv("JACK_NAME_CLIP");
-//			kDebug() << "Clip monitor connected to jack" << "\n";
-		}
-	}
+//	if (m_clipMonitor != NULL)	{
+//		rc = m_clipMonitor->render;
+//
+//		if ( rc != NULL )
+//		{
+//			rc->setJackFilter(rp->getJackFilter());
+////			setenv("JACK_NAME_CLIP", "KdliveClipMon", 1);
+////			rc->mltConnectJack();
+////			unsetenv("JACK_NAME_CLIP");
+////			kDebug() << "Clip monitor connected to jack" << "\n";
+//		}
+//	}
 
 }
 
@@ -4624,7 +4624,7 @@ void MainWindow::slotDisconnectJack()
 
 		if ( rp != NULL)
 		{
-			rp->mltDisconnectJack();
+			rp->disconnectSlave();
 			kDebug() << "Project monitor disconnected from Jack" << "\n";
 		}
 	}

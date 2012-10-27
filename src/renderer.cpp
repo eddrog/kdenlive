@@ -138,6 +138,9 @@ Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWi
     analyseAudio = KdenliveSettings::monitor_audio();
     if (profile.isEmpty()) profile = KdenliveSettings::current_profile();
     buildConsumer(profile);
+    // create the jackslave singleton instance
+    JackSlave::singleton(m_mltProfile);
+
     m_mltProducer = m_blackClip->cut(0, 1);
     m_mltConsumer->connect(*m_mltProducer);
     m_mltProducer->set_speed(0.0);
@@ -150,7 +153,7 @@ Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWi
 
 Render::~Render()
 {
-	mltDisconnectJack();
+	disconnectSlave();
 	closeMlt();
     delete m_mltProfile;
 }
@@ -4750,79 +4753,43 @@ void Render::mltOnJackLastPosReq()
 	}
 }
 
-void Render::mltConnectJack()
+void Render::connectSlave()
 {
-    /* TODO: review eddrog - connecting jack */
-    //Mlt::Properties properties(m_mltConsumer->get_properties());
+	// stop consumer
 	if (!m_mltConsumer->is_stopped())
 			m_mltConsumer->stop();
 
-    JackSlave::singleton(m_mltProfile);
-
-#if 0
-	if (m_isJackActive == false) {
-		// create jackrack filter using the factory
-		m_mltFilterJack = new Mlt::Filter(*m_mltProfile, "jackrack", NULL);
-
-		if(m_mltFilterJack != NULL && m_mltFilterJack->is_valid()) {
-			// attach filter to consumer
-			m_mltConsumer->attach(*m_mltFilterJack);
-
-			// set comsumer properties
-			m_mltConsumer->set("audio_off", 1);
-			//m_mltConsumer->set("jack_filter", jackFilter, 0, (mlt_destructor) mlt_filter_close, NULL );
-
-			// set filter properties
-			m_mltFilterJack->set("out_1", "system:playback_1");
-			m_mltFilterJack->set("out_2", "system:playback_2");
-
-			//if ( m_name == Kdenlive::projectMonitor ) 
-			{
-				// register the jack listeners
-				m_mltFilterJack->listen("jack-stopped", this, (mlt_listener) Render::_on_jack_stopped);
-				m_mltFilterJack->listen("jack-started", this, (mlt_listener) Render::_on_jack_started);
-				m_mltFilterJack->listen("jack-starting", this, (mlt_listener) Render::_on_jack_starting);
-				m_mltFilterJack->listen("jack-last-pos-req", this, (mlt_listener) Render::_on_jack_last_pos_req);
-			}
-
-			// start the consumer
-			m_mltConsumer->start();
-
-			// set the jack state
-			m_isJackActive = true;
-
-			SleepThread::msleep(1000);
-
-			m_mltConsumer->stop();
-
-
-		} else {
-			delete m_mltFilterJack;
-			m_mltFilterJack = NULL;
-		}
+	// connect jackslave to jackd
+    JACKSLAVE.connect();
+    // if slave is connected attach filter to consumer
+    if(JACKSLAVE.isConnected()) {
+		// attach filter to consumer
+		m_mltConsumer->attach(*JACKSLAVE.getFilter());
+		// set comsumer properties
+		m_mltConsumer->set("audio_off", 1);
 	}
-#endif
+
+	// start consumer for forcing the filter_jackrack to connect to jackd
+	m_mltConsumer->start();
+	SleepThread::msleep(200);
+	// stop the consumer
+	m_mltConsumer->stop();
 
 }
 
-void Render::mltDisconnectJack()
+void Render::disconnectSlave()
 {
-    	if (m_mltFilterJack && /* m_mltFilterJack->is_valid() && */ m_isJackActive)
-    	{
-    		if (!m_mltConsumer->is_stopped())
-    			m_mltConsumer->stop();
-    		// detach filter from consumer
-    		m_mltConsumer->detach(*m_mltFilterJack);
-
-    		// enable audio playback
-    		m_mltConsumer->set("audio_off", 0);
-
-    		// delete the jack filter
-    		if (m_mltFilterJack)
-    	    	delete m_mltFilterJack;
-    		// the the jack state
-    		m_isJackActive = false;
-    	}
+	if(JACKSLAVE.isConnected()) {
+		// stop consumer
+		if (!m_mltConsumer->is_stopped())
+			m_mltConsumer->stop();
+		// detach filter from consumer
+		m_mltConsumer->detach(*JACKSLAVE.getFilter());
+		// enable audio playback
+		m_mltConsumer->set("audio_off", 0);
+		// disconnect from jackd
+		JACKSLAVE.disconnect();
+	}
 }
 
 void Render::switchPlay(bool play)
@@ -4891,9 +4858,6 @@ void Render::switchPlay(bool play)
                 if (m_isZoneMode) resetZoneMode();
                 // fire stop event
         		m_mltFilterJack->fire_event("jack-stop");
-
-        		mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
-        		//mlt_events_fire(jack_properties, "jack-seek", &pos, NULL);
         	} else {
                 m_mltProducer->set_speed(0.0);
                 m_mltConsumer->set("refresh", 0);
@@ -4929,45 +4893,25 @@ void Render::switchPlay(bool play)
     }
 }
 
-void Render::stopTransportSlave()
+void Render::stopSlave()
 {
-	if (m_mltFilterJack && m_isJackActive) {
+	if(JACKSLAVE.isConnected()) {
 		if (!m_mltConsumer->is_stopped())
 			m_mltConsumer->stop();
 		// detach filter from consumer
-		m_mltConsumer->detach(*m_mltFilterJack);
-
-		// enable audio playback
-//		m_mltConsumer->set("audio_off", 0);
-
-//		// delete the jack filter
-//		if (m_mltFilterJack)
-//	    	delete m_mltFilterJack;
-//		// the the jack state
-//		m_isJackActive = false;
+		m_mltConsumer->detach(*JACKSLAVE.getFilter());
 	}
 }
 
-void Render::startTransportSlave()
+void Render::startSlave()
 {
-	if(m_mltFilterJack != NULL && m_mltFilterJack->is_valid() && m_isJackActive) {
+	if(JACKSLAVE.isConnected()) {
 		m_mltConsumer->set("audio_off", 1);
 		// attach filter to consumer
-		m_mltConsumer->attach(*m_mltFilterJack);
+		m_mltConsumer->attach(*JACKSLAVE.getFilter());
 	}
 }
 
-Mlt::Filter * Render::getJackFilter()
-{
-	return m_mltFilterJack;
-}
-
-
-void Render::setJackFilter(Mlt::Filter *mltFilterJack)
-{
-	m_mltFilterJack = mltFilterJack;
-	m_isJackActive = true;
-}
 #endif
 
 

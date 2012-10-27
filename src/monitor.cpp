@@ -739,7 +739,7 @@ void Monitor::stop()
 {
     if (render) {
     	render->stop();
-    	render->stopTransportSlave();
+    	render->stopSlave();
     }
 }
 
@@ -747,7 +747,7 @@ void Monitor::start()
 {
     if (!isVisible() || !isActive()) return;
     if (render) {
-    	render->startTransportSlave();
+    	render->startSlave();
     	render->doRefresh();// start();
     }
 }

@@ -20,16 +20,9 @@
 #include "jackslave.h"
 
 JackSlave::JackSlave(Mlt::Profile * profile) :
-	m_isJackActive(false)
+	m_isConnected(false)
 {
-	if (m_isJackActive == false) {
-		// create jackrack filter using the factory
-		m_mltFilterJack = new Mlt::Filter(*profile, "jackrack", NULL);
-
-		if(m_mltFilterJack != NULL && m_mltFilterJack->is_valid()) {
-			m_isJackActive = true;
-		}
-	}
+	m_mltProfile = profile;
 }
 
 JackSlave& JackSlave::singleton(Mlt::Profile * profile)
@@ -46,4 +39,56 @@ JackSlave& JackSlave::singleton(Mlt::Profile * profile)
 JackSlave::~JackSlave()
 {
 	// TODO Auto-generated destructor stub
+
+
 }
+
+bool JackSlave::isConnected()
+{
+	return m_isConnected;
+}
+
+Mlt::Filter * JackSlave::getFilter()
+{
+	return m_mltFilterJack;
+}
+
+void JackSlave::connect()
+{
+	if (m_isConnected == false /* && m_mltFilterJack == 0 */) {
+		// create jackrack filter using the factory
+		m_mltFilterJack = new Mlt::Filter(*m_mltProfile, "jackrack", NULL);
+
+		if(m_mltFilterJack != NULL && m_mltFilterJack->is_valid()) {
+			// set filter properties
+			m_mltFilterJack->set("out_1", "system:playback_1");
+			m_mltFilterJack->set("out_2", "system:playback_2");
+
+			// register the jack listeners
+			m_mltFilterJack->listen("jack-stopped", this, (mlt_listener) JackSlave::onJackStoppedProxy);
+			m_mltFilterJack->listen("jack-started", this, (mlt_listener) JackSlave::onJackStartedProxy);
+//			m_mltFilterJack->listen("jack-starting", this, (mlt_listener) Render::_on_jack_starting);
+//			m_mltFilterJack->listen("jack-last-pos-req", this, (mlt_listener) Render::_on_jack_last_pos_req);
+
+			m_isConnected = true;
+		}
+	}
+}
+
+void JackSlave::disconnect()
+{
+	if(m_mltFilterJack && isConnected()) {
+		delete m_mltFilterJack;
+		m_mltFilterJack = 0;
+		m_isConnected = false;
+	}
+}
+
+void JackSlave::onJackStartedProxy(mlt_properties owner, mlt_consumer consumer, mlt_position *position)
+{
+}
+
+void JackSlave::onJackStoppedProxy(mlt_properties owner, mlt_consumer consumer, mlt_position *position)
+{
+}
+

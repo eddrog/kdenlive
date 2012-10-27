@@ -112,12 +112,10 @@ Q_OBJECT public:
     void seekToFrameDiff(int diff);
 
 #ifdef USE_JACK
-    void mltConnectJack();
-    void mltDisconnectJack();
-    void startTransportSlave();
-    void stopTransportSlave();
-    Mlt::Filter * getJackFilter();
-    void setJackFilter(Mlt::Filter *mltFilterJack);
+    void connectSlave();
+    void disconnectSlave();
+    void startSlave();
+    void stopSlave();
 #endif
 
     QPixmap getImageThumbnail(KUrl url, int width, int height);
