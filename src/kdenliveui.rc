@@ -53,6 +53,9 @@
       <Action name="edit_clip" />
       <Action name="delete_clip" />
       <Separator />
+      <Action name="connect_jack" />
+      <Action name="disconnect_jack" />
+      <Separator />
       <Action name="project_clean" />
       <Action name="project_render" />
       <Action name="project_adjust_profile" />
@@ -126,6 +129,7 @@
 		<Action name="show_audio_thumbs" />
 		<Action name="show_markers" />
 		<Action name="snap" />
+        <Action name="jack_transport" />
 	  <Separator />
 		<Action name="zoom_in" />
 		<Action name="zoom_out" />		
@@ -161,9 +165,6 @@
       <Action name="switch_monitor" />
       <Action name="insert_project_tree" />
       <Action name="insert_timeline" />
-      <Separator />
-      <Action name="connect_jack" />
-      <Action name="disconnect_jack" />
     </Menu>
     <Menu name="dockwindows" ><text>View</text>
       <Menu name="layout_save_as" ><text>Save Layout As</text>

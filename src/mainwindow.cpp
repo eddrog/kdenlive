@@ -1156,6 +1156,13 @@ void MainWindow::setupActions()
     m_buttonSnap->setChecked(KdenliveSettings::snaptopoints());
     connect(m_buttonSnap, SIGNAL(triggered()), this, SLOT(slotSwitchSnap()));
 
+    m_buttonJackTransport = new KAction(/*KIcon("kdenlive-snap"), */i18n("Enable jack transport"), this);
+    toolbar->addAction(m_buttonJackTransport);
+    m_buttonJackTransport->setCheckable(true);
+    m_buttonJackTransport->setChecked(KdenliveSettings::snaptopoints());
+    connect(m_buttonJackTransport, SIGNAL(triggered()), this, SLOT(slotSwitchJackTransport()));
+
+
     actionWidget = toolbar->widgetForAction(m_buttonAutomaticSplitAudio);
     actionWidget->setMaximumWidth(max);
     actionWidget->setMaximumHeight(max - 4);
@@ -1173,6 +1180,10 @@ void MainWindow::setupActions()
     actionWidget->setMaximumHeight(max - 4);
 
     actionWidget = toolbar->widgetForAction(m_buttonSnap);
+    actionWidget->setMaximumWidth(max);
+    actionWidget->setMaximumHeight(max - 4);
+
+    actionWidget = toolbar->widgetForAction(m_buttonJackTransport);
     actionWidget->setMaximumWidth(max);
     actionWidget->setMaximumHeight(max - 4);
 
@@ -1198,6 +1209,7 @@ void MainWindow::setupActions()
     collection.addAction("show_audio_thumbs", m_buttonAudioThumbs);
     collection.addAction("show_markers", m_buttonShowMarkers);
     collection.addAction("snap", m_buttonSnap);
+    collection.addAction("jack_transport", m_buttonJackTransport);
     collection.addAction("zoom_fit", m_buttonFitZoom);
     collection.addAction("zoom_in", m_zoomIn);
     collection.addAction("zoom_out", m_zoomOut);
@@ -1318,12 +1330,12 @@ void MainWindow::setupActions()
     connect(insertTimeline, SIGNAL(triggered(bool)), this, SLOT(slotInsertZoneToTimeline()));
 
     KAction *connectJack = collection.addAction("connect_jack");
-    connectJack->setText(i18n("Connect Jack"));
+    connectJack->setText(i18n("Jack connect"));
     connectJack->setShortcut(Qt::SHIFT + Qt::CTRL + Qt::Key_A);
     connect(connectJack, SIGNAL(triggered(bool)), this, SLOT(slotConnectJack()));
 
     KAction *disconnectJack = collection.addAction("disconnect_jack");
-    disconnectJack->setText(i18n("Disconnect Jack"));
+    disconnectJack->setText(i18n("Jack disconnect"));
     disconnectJack->setShortcut(Qt::SHIFT + Qt::CTRL + Qt::Key_D);
     connect(disconnectJack, SIGNAL(triggered(bool)), this, SLOT(slotDisconnectJack()));
 
@@ -2804,6 +2816,9 @@ void MainWindow::slotSwitchSnap()
     m_buttonSnap->setChecked(KdenliveSettings::snaptopoints());
 }
 
+void MainWindow::slotSwitchJackTransport()
+{
+}
 
 void MainWindow::slotDeleteItem()
 {

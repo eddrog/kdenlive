@@ -258,6 +258,7 @@ private:
     KAction *m_buttonRazorTool;
     KAction *m_buttonSpacerTool;
     KAction *m_buttonSnap;
+    KAction *m_buttonJackTransport;
     KAction *m_saveAction;
     KAction *m_closeAction;
     QSlider *m_zoomSlider;
@@ -379,6 +380,7 @@ private slots:
     void slotSwitchAudioThumbs();
     void slotSwitchMarkersComments();
     void slotSwitchSnap();
+    void slotSwitchJackTransport();
     void slotRenderProject();
     void slotFullScreen();
     void slotUpdateDocumentState(bool modified);
