@@ -746,10 +746,12 @@ void Monitor::stop()
 void Monitor::start()
 {
     if (!isVisible() || !isActive()) return;
+
     if (render) {
     	render->startSlave();
-    	render->doRefresh();// start();
+    	render->startConsumer();
     }
+
 }
 
 void Monitor::refreshMonitor(bool visible)
@@ -848,7 +850,6 @@ void Monitor::slotSetClipProducer(DocClipBase *clip, QPoint zone, bool forceUpda
 	if (m_currentClip) m_currentClip->lastSeekPosition = render->seekFramePosition();
         m_currentClip = clip;
 	if (position == -1) position = clip->lastSeekPosition;
-        if (m_currentClip) slotActivateMonitor();
         updateMarkers(clip);
         Mlt::Producer *prod = NULL;
         if (clip) prod = clip->getCloneProducer();
