@@ -31,16 +31,16 @@ class JackSlave : public QObject
 public:
     static JackSlave& singleton(Mlt::Profile * profile = 0);
 	virtual ~JackSlave();
-	bool isConnected();
-	Mlt::Filter * getFilter();
-	void connect();
-	void disconnect();
+	bool isActive();
+	Mlt::Filter * filter();
+	void open();
+	void close();
 
 protected:
 	JackSlave(Mlt::Profile * profile);
 
 private:
-	bool m_isConnected;
+	bool m_isActive;
     Mlt::Filter *m_mltFilterJack;
     Mlt::Profile *m_mltProfile;
 

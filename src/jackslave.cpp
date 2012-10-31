@@ -20,7 +20,7 @@
 #include "jackslave.h"
 
 JackSlave::JackSlave(Mlt::Profile * profile) :
-	m_isConnected(false)
+	m_isActive(false)
 {
 	m_mltProfile = profile;
 }
@@ -43,19 +43,19 @@ JackSlave::~JackSlave()
 
 }
 
-bool JackSlave::isConnected()
+bool JackSlave::isActive()
 {
-	return m_isConnected;
+	return m_isActive;
 }
 
-Mlt::Filter * JackSlave::getFilter()
+Mlt::Filter * JackSlave::filter()
 {
 	return m_mltFilterJack;
 }
 
-void JackSlave::connect()
+void JackSlave::open()
 {
-	if (m_isConnected == false /* && m_mltFilterJack == 0 */) {
+	if (m_isActive == false /* && m_mltFilterJack == 0 */) {
 		// create jackrack filter using the factory
 		m_mltFilterJack = new Mlt::Filter(*m_mltProfile, "jackrack", NULL);
 
@@ -70,17 +70,17 @@ void JackSlave::connect()
 //			m_mltFilterJack->listen("jack-starting", this, (mlt_listener) Render::_on_jack_starting);
 //			m_mltFilterJack->listen("jack-last-pos-req", this, (mlt_listener) Render::_on_jack_last_pos_req);
 
-			m_isConnected = true;
+			m_isActive = true;
 		}
 	}
 }
 
-void JackSlave::disconnect()
+void JackSlave::close()
 {
-	if(m_mltFilterJack && isConnected()) {
+	if(m_mltFilterJack && isActive()) {
 		delete m_mltFilterJack;
 		m_mltFilterJack = 0;
-		m_isConnected = false;
+		m_isActive = false;
 	}
 }
 

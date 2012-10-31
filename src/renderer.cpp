@@ -4769,17 +4769,12 @@ void Render::connectSlave()
 			m_mltConsumer->stop();
 
 	// connect jackslave to jackd
-    JACKSLAVE.connect();
+    JACKSLAVE.open();
     // if slave is connected attach filter to consumer
-    if(JACKSLAVE.isConnected()) {
-		// attach filter to consumer
-		m_mltConsumer->attach(*JACKSLAVE.getFilter());
-		// set comsumer properties
-		m_mltConsumer->set("audio_off", 1);
-	}
-
+    startSlave();
 	// start consumer for forcing the filter_jackrack to connect to jackd
 	m_mltConsumer->start();
+	// give jackd some time
 	SleepThread::msleep(200);
 	// stop the consumer
 	m_mltConsumer->stop();
@@ -4788,16 +4783,14 @@ void Render::connectSlave()
 
 void Render::disconnectSlave()
 {
-	if(JACKSLAVE.isConnected()) {
-		// stop consumer
-		if (!m_mltConsumer->is_stopped())
-			m_mltConsumer->stop();
-		// detach filter from consumer
-		m_mltConsumer->detach(*JACKSLAVE.getFilter());
+	// stop slave
+	stopSlave();
+
+	if(JACKSLAVE.isActive()) {
 		// enable audio playback
 		m_mltConsumer->set("audio_off", 0);
 		// disconnect from jackd
-		JACKSLAVE.disconnect();
+		JACKSLAVE.close();
 	}
 }
 
@@ -4904,20 +4897,20 @@ void Render::switchPlay(bool play)
 
 void Render::stopSlave()
 {
-	if(JACKSLAVE.isConnected()) {
+	if(JACKSLAVE.isActive()) {
 		if (!m_mltConsumer->is_stopped())
 			m_mltConsumer->stop();
 		// detach filter from consumer
-		m_mltConsumer->detach(*JACKSLAVE.getFilter());
+		m_mltConsumer->detach(*JACKSLAVE.filter());
 	}
 }
 
 void Render::startSlave()
 {
-	if(JACKSLAVE.isConnected()) {
+	if(JACKSLAVE.isActive()) {
 		m_mltConsumer->set("audio_off", 1);
 		// attach filter to consumer
-		m_mltConsumer->attach(*JACKSLAVE.getFilter());
+		m_mltConsumer->attach(*JACKSLAVE.filter());
 	}
 }
 
