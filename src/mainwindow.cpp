@@ -1159,7 +1159,7 @@ void MainWindow::setupActions()
     m_buttonJackTransport = new KAction(/*KIcon("kdenlive-snap"), */i18n("Enable jack transport"), this);
     toolbar->addAction(m_buttonJackTransport);
     m_buttonJackTransport->setCheckable(true);
-    m_buttonJackTransport->setChecked(KdenliveSettings::snaptopoints());
+    m_buttonJackTransport->setChecked(KdenliveSettings::jacktransport());
     connect(m_buttonJackTransport, SIGNAL(triggered()), this, SLOT(slotSwitchJackTransport()));
 
 
@@ -2818,6 +2818,8 @@ void MainWindow::slotSwitchSnap()
 
 void MainWindow::slotSwitchJackTransport()
 {
+    KdenliveSettings::setJacktransport(!KdenliveSettings::jacktransport());
+    m_buttonJackTransport->setChecked(KdenliveSettings::jacktransport());
 }
 
 void MainWindow::slotDeleteItem()
