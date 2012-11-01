@@ -29,7 +29,7 @@ JackSlave& JackSlave::singleton(Mlt::Profile * profile)
 {
     static JackSlave* instance = 0;
 
-    if (!instance) {
+    if (!instance && profile != 0) {
     	instance = new JackSlave(profile);
     }
 

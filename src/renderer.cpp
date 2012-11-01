@@ -138,12 +138,14 @@ Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWi
     analyseAudio = KdenliveSettings::monitor_audio();
     if (profile.isEmpty()) profile = KdenliveSettings::current_profile();
     buildConsumer(profile);
-    // create the jackslave singleton instance
-    JackSlave::singleton(m_mltProfile);
 
     m_mltProducer = m_blackClip->cut(0, 1);
     m_mltConsumer->connect(*m_mltProducer);
     m_mltProducer->set_speed(0.0);
+
+    if(&JACKSLAVE && !JACKSLAVE.isActive())
+    	connectSlave(false);
+
     m_refreshTimer.setSingleShot(true);
     m_refreshTimer.setInterval(100);
     connect(&m_refreshTimer, SIGNAL(timeout()), this, SLOT(refresh()));
@@ -295,7 +297,7 @@ void Render::buildConsumer(const QString &profileName)
 
     QString audioDevice = KdenliveSettings::audiodevicename();
     if (!audioDevice.isEmpty())
-        m_mltConsumer->set("audio_device", audioDevice.toUtf8().constData());
+    	m_mltConsumer->set("audio_device", audioDevice.toUtf8().constData());
 
     if (!videoDriver.isEmpty())
         m_mltConsumer->set("video_driver", videoDriver.toUtf8().constData());
@@ -308,8 +310,16 @@ void Render::buildConsumer(const QString &profileName)
         audioDriver = KdenliveSettings::autoaudiodrivername();
     */
 
-    if (!audioDriver.isEmpty())
-        m_mltConsumer->set("audio_driver", audioDriver.toUtf8().constData());
+    if (!audioDriver.isEmpty()) {
+    	if(audioDriver == "jack") {
+			// create the jackslave singleton instance
+			JackSlave::singleton(m_mltProfile);
+			m_mltConsumer->set("audio_off", 1);
+//			connectSlave();
+        } else {
+            m_mltConsumer->set("audio_driver", audioDriver.toUtf8().constData());
+        }
+    }
 
     m_mltConsumer->set("progressive", 1);
     m_mltConsumer->set("audio_buffer", 1024);
@@ -4762,23 +4772,26 @@ void Render::mltOnJackLastPosReq()
 	}
 }
 
-void Render::connectSlave()
+void Render::connectSlave(bool triggerInit)
 {
 	// stop consumer
 	if (!m_mltConsumer->is_stopped())
 			m_mltConsumer->stop();
 
 	// connect jackslave to jackd
-    JACKSLAVE.open();
+    if (&JACKSLAVE)
+    	JACKSLAVE.open();
     // if slave is connected attach filter to consumer
     startSlave();
-	// start consumer for forcing the filter_jackrack to connect to jackd
-	m_mltConsumer->start();
-	// give jackd some time
-	SleepThread::msleep(200);
-	// stop the consumer
-	m_mltConsumer->stop();
 
+    if (triggerInit) {
+		// start consumer for forcing the filter_jackrack to connect to jackd
+		m_mltConsumer->start();
+		// give jackd some time
+		SleepThread::msleep(200);
+		// stop the consumer
+		m_mltConsumer->stop();
+	}
 }
 
 void Render::disconnectSlave()
@@ -4786,9 +4799,9 @@ void Render::disconnectSlave()
 	// stop slave
 	stopSlave();
 
-	if(JACKSLAVE.isActive()) {
+	if(&JACKSLAVE && JACKSLAVE.isActive()) {
 		// enable audio playback
-		m_mltConsumer->set("audio_off", 0);
+//		m_mltConsumer->set("audio_off", 0);
 		// disconnect from jackd
 		JACKSLAVE.close();
 	}
@@ -4897,7 +4910,7 @@ void Render::switchPlay(bool play)
 
 void Render::stopSlave()
 {
-	if(JACKSLAVE.isActive()) {
+	if(&JACKSLAVE && JACKSLAVE.isActive()) {
 		if (!m_mltConsumer->is_stopped())
 			m_mltConsumer->stop();
 		// detach filter from consumer
@@ -4907,7 +4920,7 @@ void Render::stopSlave()
 
 void Render::startSlave()
 {
-	if(JACKSLAVE.isActive()) {
+	if(&JACKSLAVE && JACKSLAVE.isActive()) {
 		m_mltConsumer->set("audio_off", 1);
 		// attach filter to consumer
 		m_mltConsumer->attach(*JACKSLAVE.filter());
