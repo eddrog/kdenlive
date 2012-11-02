@@ -92,3 +92,28 @@ void JackSlave::onJackStoppedProxy(mlt_properties owner, mlt_consumer consumer, 
 {
 }
 
+void JackSlave::startPlayback()
+{
+	if (isActive()) {
+		/* file transport start event */
+		m_mltFilterJack->fire_event("jack-start");
+	}
+}
+
+void JackSlave::stopPlayback()
+{
+	if (isActive()) {
+		/* fire transport stop event */
+		m_mltFilterJack->fire_event("jack-stop");
+	}
+}
+
+void JackSlave::locate(int position)
+{
+    if (isActive()) {
+		mlt_properties jack_properties = (mlt_properties)m_mltFilterJack->get_properties();
+		mlt_events_fire(jack_properties, "jack-seek", &position, NULL);
+	}
+}
+
+

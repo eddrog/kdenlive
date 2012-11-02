@@ -35,6 +35,9 @@ public:
 	Mlt::Filter * filter();
 	void open();
 	void close();
+	void startPlayback();
+	void stopPlayback();
+	void locate(int position);
 
 protected:
 	JackSlave(Mlt::Profile * profile);
