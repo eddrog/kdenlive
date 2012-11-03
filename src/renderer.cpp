@@ -131,6 +131,7 @@ Render::Render(Kdenlive::MONITORID rendererName, int winid, QString profile, QWi
     m_isLoopMode(false),
     m_isSplitView(false),
     m_isJackActive(false),
+    m_isSlaveTransportEnabled(false),
     m_blackClip(NULL),
     m_winid(winid)
 {
@@ -419,12 +420,22 @@ void Render::seek(GenTime time)
     seek(pos);
 }
 
-void Render::seek(int time)
+void Render::seek(int time, bool slave)
 {
     if (!m_mltProducer)
         return;
 
 #ifdef USE_JACK
+    if (!slave && isSlaveTransportEnabled()) {
+    	if(&JACKSLAVE) {
+    		JACKSLAVE.locate(time < 0 ? 0 : time);
+    	}
+    	/* return */
+//    	return;
+    }
+#endif
+
+#if 0 /* USE_JACK */
     if(m_name == Kdenlive::projectMonitor && m_mltFilterJack && m_isJackActive)
     {
     	if (time < 0) time = 0;
@@ -1582,13 +1593,25 @@ void Render::pause()
     m_mltConsumer->purge();
 }
 
-#ifndef USE_JACK
-void Render::switchPlay(bool play)
+void Render::switchPlay(bool play, bool slave)
 {
     QMutexLocker locker(&m_mutex);
     requestedSeekPosition = SEEK_INACTIVE;
     if (!m_mltProducer || !m_mltConsumer)
         return;
+
+    if (!slave && isSlaveTransportEnabled()) {
+    	if(&JACKSLAVE) {
+    		if (play) {
+    			JACKSLAVE.startPlayback();
+    		} else {
+    			JACKSLAVE.stopPlayback();
+    		}
+    	}
+    	/* return */
+    	return;
+    }
+
     if (m_isZoneMode) resetZoneMode();
     if (play && m_mltProducer->get_speed() == 0.0) {
         if (m_name == Kdenlive::clipMonitor && m_mltConsumer->position() == m_mltProducer->get_out()) m_mltProducer->seek(0);
@@ -1614,7 +1637,6 @@ void Render::switchPlay(bool play)
         emit rendererPosition(m_framePosition);*/
     }
 }
-#endif
 
 void Render::play(double speed)
 {
@@ -4807,6 +4829,7 @@ void Render::disconnectSlave()
 	}
 }
 
+#if 0
 void Render::switchPlay(bool play)
 {
     QMutexLocker locker(&m_mutex);
@@ -4907,6 +4930,8 @@ void Render::switchPlay(bool play)
         emit rendererPosition(m_framePosition);*/
     }
 }
+#endif
+
 
 void Render::stopSlave()
 {
@@ -4925,6 +4950,61 @@ void Render::startSlave()
 		// attach filter to consumer
 		m_mltConsumer->attach(*JACKSLAVE.filter());
 	}
+}
+
+bool Render::isSlaveTransportEnabled()
+{
+	return m_isSlaveTransportEnabled;
+}
+
+void Render::enableSlaveTransport()
+{
+	if (&JACKSLAVE) {
+		/* connect transport callbacks */
+		connect(&JACKSLAVE, SIGNAL(playbackStarted(int)),
+				this, SLOT(slotOnSlavePlaybackStarted(int)));
+		connect(&JACKSLAVE, SIGNAL(playbackStopped(int)),
+				this, SLOT(slotOnSlavePlaybackStopped(int)));
+
+		/* stop playback and relocate */
+		JACKSLAVE.stopPlayback();
+		JACKSLAVE.locate(seekFramePosition());
+		/* set indication flag */
+		m_isSlaveTransportEnabled = true;
+		/* DEBUG */
+		kDebug() << "// // // Slave Transport enabled";
+	}
+}
+
+void Render::disableSlaveTransport()
+{
+	if (&JACKSLAVE && isSlaveTransportEnabled()) {
+		/* disconnect transport callbacks */
+		disconnect(&JACKSLAVE, SIGNAL(playbackStarted(int)),
+				this, SLOT(slotOnSlavePlaybackStarted(int)));
+		disconnect(&JACKSLAVE, SIGNAL(playbackStopped(int)),
+				this, SLOT(slotOnSlavePlaybackStopped(int)));
+
+		/* stop playback */
+		switchPlay(false);
+		slotOnSlavePlaybackStopped(seekFramePosition());
+		/* reset flag */
+		m_isSlaveTransportEnabled = false;
+		/* DEBUG */
+		kDebug() << "// // // Slave Transport disabled";
+	}
+}
+
+void Render::slotOnSlavePlaybackStarted(int position)
+{
+	seek(position, true);
+	switchPlay(true, true);
+}
+
+void Render::slotOnSlavePlaybackStopped(int position)
+{
+	switchPlay(false, true);
+	seek(position, true);
 }
 
 #endif

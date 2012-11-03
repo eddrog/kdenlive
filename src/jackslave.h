@@ -50,6 +50,9 @@ private:
     static void onJackStartedProxy(mlt_properties owner, mlt_consumer consumer, mlt_position *position);
     static void onJackStoppedProxy(mlt_properties owner, mlt_consumer consumer, mlt_position *position);
 
+signals:
+	void playbackStarted(int position);
+	void playbackStopped(int position);
 };
 
 #define JACKSLAVE JackSlave::singleton()

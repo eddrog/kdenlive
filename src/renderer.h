@@ -108,7 +108,7 @@ Q_OBJECT public:
 
     /** @brief Seeks the renderer clip to the given time. */
     void seek(GenTime time);
-    void seek(int time);
+    void seek(int time, bool slave = false);
     void seekToFrameDiff(int diff);
 
 #ifdef USE_JACK
@@ -116,6 +116,10 @@ Q_OBJECT public:
     void disconnectSlave();
     void startSlave();
     void stopSlave();
+
+    bool isSlaveTransportEnabled();
+    void enableSlaveTransport();
+    void disableSlaveTransport();
 #endif
 
     QPixmap getImageThumbnail(KUrl url, int width, int height);
@@ -145,7 +149,7 @@ Q_OBJECT public:
      * The speed is relative to normal playback, e.g. 1.0 is normal speed, 0.0
      * is paused, -1.0 means play backwards. It does not specify start/stop */
     void play(double speed);
-    void switchPlay(bool play);
+    void switchPlay(bool play, bool slave = false);
     void pause();
 
     /** @brief Stops playing.
@@ -386,6 +390,9 @@ private:
     void mltOnJackStarted(mlt_position *position);
     void mltOnJackStarting(mlt_position *position);
     void mltOnJackLastPosReq();
+//#ifdef USE_JACK
+    bool m_isSlaveTransportEnabled;
+//#endif
 #endif
 
     void closeMlt();
@@ -487,6 +494,9 @@ public slots:
     void seekToFrame(int pos);
     /** @brief Starts a timer to query for a refresh. */
     void doRefresh();
+
+    void slotOnSlavePlaybackStarted(int position);
+    void slotOnSlavePlaybackStopped(int position);
 };
 
 #endif

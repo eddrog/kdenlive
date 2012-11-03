@@ -86,10 +86,20 @@ void JackSlave::close()
 
 void JackSlave::onJackStartedProxy(mlt_properties owner, mlt_consumer consumer, mlt_position *position)
 {
+	/* get slave ref */
+	JackSlave *slave = (JackSlave*)consumer;
+
+	/* fire playback started event */
+	slave->playbackStarted(*position);
 }
 
 void JackSlave::onJackStoppedProxy(mlt_properties owner, mlt_consumer consumer, mlt_position *position)
 {
+	/* get slave ref */
+	JackSlave *slave = (JackSlave*)consumer;
+
+	/* fire playback started event */
+	slave->playbackStopped(*position);
 }
 
 void JackSlave::startPlayback()

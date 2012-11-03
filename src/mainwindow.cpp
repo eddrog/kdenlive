@@ -2820,6 +2820,13 @@ void MainWindow::slotSwitchJackTransport()
 {
     KdenliveSettings::setJacktransport(!KdenliveSettings::jacktransport());
     m_buttonJackTransport->setChecked(KdenliveSettings::jacktransport());
+
+    /* switch transport settings */
+    if (KdenliveSettings::jacktransport()) {
+    	m_monitorManager->slotEnableSlaveTransport();
+    } else {
+    	m_monitorManager->slotDisableSlaveTransport();
+    }
 }
 
 void MainWindow::slotDeleteItem()
