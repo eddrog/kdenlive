@@ -760,7 +760,7 @@ void KdenliveSettingsDialog::slotCheckAlsaDriver()
 
 void KdenliveSettingsDialog::loadTranscodeProfiles()
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig("kdenlivetranscodingrc");
+    KSharedConfigPtr config = KSharedConfig::openConfig("kdenlivetranscodingrc", KConfig::CascadeConfig);
     KConfigGroup transConfig(config, "Transcoding");
     // read the entries
     m_configTranscode.profiles_list->blockSignals(true);
@@ -782,7 +782,7 @@ void KdenliveSettingsDialog::loadTranscodeProfiles()
 
 void KdenliveSettingsDialog::saveTranscodeProfiles()
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig("kdenlivetranscodingrc");
+    KSharedConfigPtr config = KSharedConfig::openConfig("kdenlivetranscodingrc", KConfig::CascadeConfig);
     //KSharedConfigPtr config = KGlobal::config();
     KConfigGroup transConfig(config, "Transcoding");
     // read the entries

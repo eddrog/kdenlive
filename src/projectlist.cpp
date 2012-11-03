@@ -954,10 +954,11 @@ void ProjectList::slotUpdateClipProperties(const QString &id, QMap <QString, QSt
                    properties.contains("xmldata") ||
                    properties.contains("force_aspect_num") ||
                    properties.contains("force_aspect_den") ||
+                   properties.contains("full_luma") ||
                    properties.contains("templatetext")) {
             slotRefreshClipThumbnail(item);
             emit refreshClip(id, true);
-        } else if (properties.contains("full_luma") || properties.contains("force_colorspace") || properties.contains("loop")) {
+        } else if (properties.contains("force_colorspace") || properties.contains("loop")) {
             emit refreshClip(id, false);
         }
     }
